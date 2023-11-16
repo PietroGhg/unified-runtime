@@ -215,10 +215,10 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(ur_device_handle_t hDevice,
     return ReturnValue(uint64_t{0});
   case UR_DEVICE_INFO_GLOBAL_MEM_SIZE:
     // TODO : CHECK
-    return ReturnValue(uint64_t{0});
+    return ReturnValue(uint64_t{32768});
   case UR_DEVICE_INFO_LOCAL_MEM_SIZE:
     // TODO : CHECK
-    return ReturnValue(uint64_t{0});
+    return ReturnValue(uint64_t{32768});
   case UR_DEVICE_INFO_MAX_CONSTANT_BUFFER_SIZE:
     // TODO : CHECK
     return ReturnValue(uint64_t{0});
@@ -258,9 +258,9 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(ur_device_handle_t hDevice,
   case UR_DEVICE_INFO_BUILD_ON_SUBDEVICE:
     return ReturnValue(bool{0});
   case UR_DEVICE_INFO_ATOMIC_64:
-    return ReturnValue(bool{0});
+    return ReturnValue(bool{1});
   case UR_DEVICE_INFO_BFLOAT16:
-    return ReturnValue(bool{0});
+    return ReturnValue(bool{1});
   case UR_DEVICE_INFO_MEM_CHANNEL_SUPPORT:
     return ReturnValue(bool{0});
   case UR_DEVICE_INFO_IMAGE_SRGB:
