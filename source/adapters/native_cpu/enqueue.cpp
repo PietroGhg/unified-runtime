@@ -37,8 +37,15 @@ struct NDRDescT {
       GlobalOffset[I] = 0;
     }
   }
+
+  void dump(std::ostream& os) const {
+    os << "GlobalSize: " << GlobalSize[0] << " " << GlobalSize[1] << " "<< GlobalSize[2] << "\n";
+    os << "LocalSize: " << LocalSize[0] << " " << LocalSize[1] << " "<< LocalSize[2] << "\n";
+    os << "GlobalOffset: " << GlobalOffset[0] << " " << GlobalOffset[1] << " "<< GlobalOffset[2] << "\n";
+  }
 };
 } // namespace native_cpu
+
 
 UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
     ur_queue_handle_t hQueue, ur_kernel_handle_t hKernel, uint32_t workDim,
@@ -71,13 +78,11 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
   auto numWG2 = ndr.GlobalSize[2] / ndr.LocalSize[2];
   bool isLocalSizeOne =
       ndr.LocalSize[0] == 1 && ndr.LocalSize[1] == 1 && ndr.LocalSize[2] == 1;
-  
-
   native_cpu::state state(ndr.GlobalSize[0], ndr.GlobalSize[1],
                           ndr.GlobalSize[2], ndr.LocalSize[0], ndr.LocalSize[1],
                           ndr.LocalSize[2], ndr.GlobalOffset[0],
                           ndr.GlobalOffset[1], ndr.GlobalOffset[2]);
-  if (isLocalSizeOne) {
+  if (isLocalSizeOne && ndr.GlobalSize[0] > numParallelThreads) {
     // If the local size is one, we make the assumption that we are running a
     // parallel_for over a sycl::range Todo: we could add compiler checks and
     // kernel properties for this (e.g. check that no barriers are called, no
@@ -85,24 +90,37 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
 
     // Todo: this assumes that dim 0 is the best dimension over which we want to
     // parallelize
-    size_t itemsPerThread = numWG0 / numParallelThreads;
-    itemsPerThread = itemsPerThread > 0 ? itemsPerThread : 1;
+
+    // Sice we also vectorize the kernel, and vectorization happens within the 
+    // work group loop, it's better to have a large-ish local size. We can 
+    // divide the global range by the number of threads, set that as the local size 
+    // and peel everything else.
+
+    size_t new_num_work_groups_0 = numParallelThreads;
+    size_t itemsPerThread = ndr.GlobalSize[0] / numParallelThreads;
+    native_cpu::state fake_state(new_num_work_groups_0, ndr.GlobalSize[1],
+                            ndr.GlobalSize[2], itemsPerThread, ndr.LocalSize[1],
+                            ndr.LocalSize[2], ndr.GlobalOffset[0],
+                            ndr.GlobalOffset[1], ndr.GlobalOffset[2]);
+    if(false) {
+      std::cout << "global_size_0 " << ndr.GlobalSize[0] << "\n";
+      std::cout << "itemsPerThread "  << itemsPerThread << "\n";
+      std::cout << "new_num_work_groups_0 " << new_num_work_groups_0 << "\n";
+      std::cout << "peel start: " << new_num_work_groups_0*itemsPerThread << "\n";
+    }
+  
     for (unsigned g2 = 0; g2 < numWG2; g2++) {
       for (unsigned g1 = 0; g1 < numWG1; g1++) {
-        unsigned g0 = 0;
-        for (; g0 < numWG0 - itemsPerThread; g0 += itemsPerThread) {
+        for ( unsigned g0 = 0; g0 < new_num_work_groups_0; g0 += 1) {
           futures.emplace_back(tp.schedule_task(
-              [state, hKernel, g0, g1, g2, itemsPerThread](size_t) mutable {
-                for (unsigned itemCount = 0; itemCount < itemsPerThread;
-                     itemCount++) {
-                  state.update(g0 + itemCount, g1, g2, 0, 0, 0);
-                  hKernel->_subhandler(hKernel->_args.data(), &state);
-                }
+              [fake_state, hKernel, g0, g1, g2](size_t) mutable {
+                  fake_state.update(g0, g1, g2);
+                  hKernel->_subhandler(hKernel->_args.data(), &fake_state);
               }));
         }
         // peel
-        for (; g0 < numWG0; g0++) {
-          state.update(g0, g1, g2, 0, 0, 0);
+        for (unsigned g0 = new_num_work_groups_0*itemsPerThread; g0 < numWG0; g0++) {
+          state.update(g0, g1, g2);
           hKernel->_subhandler(hKernel->_args.data(), &state);
         }
       }
@@ -115,19 +133,11 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
           // Todo: this schedules one work group at a time, we could schedule
           // groups of work groups in order to reduce synchronization overhead.
           futures.emplace_back(tp.schedule_task(
-              [state, kernel = *hKernel, g0, g1, g2, numParallelThreads,
-                   &ndr](size_t threadId) mutable {
+              [state, kernel = *hKernel, g0, g1, g2, numParallelThreads
+                   ](size_t threadId) mutable {
                 kernel.handleLocalArgs(numParallelThreads, threadId);
-                for (unsigned local2 = 0; local2 < ndr.LocalSize[2]; local2++) {
-                  for (unsigned local1 = 0; local1 < ndr.LocalSize[1];
-                       local1++) {
-                    for (unsigned local0 = 0; local0 < ndr.LocalSize[0];
-                         local0++) {
-                      state.update(g0, g1, g2, local0, local1, local2);
+                      state.update(g0, g1, g2);
                       kernel._subhandler(kernel._args.data(), &state);
-                    }
-                  }
-                }
               }));
         }
       }
@@ -193,11 +203,12 @@ static inline ur_result_t enqueueMemBufferReadWriteRect_impl(
         size_t host_origin = (d + HostOffset.z) * HostSlicePitch +
                              (h + HostOffset.y) * HostRowPitch + w +
                              HostOffset.x;
+        int8_t &host_mem = ur_cast<int8_t *>(DstMem)[host_origin];
         int8_t &buff_mem = ur_cast<int8_t *>(Buff->_mem)[buff_orign];
-        if constexpr (IsRead)
-          ur_cast<int8_t *>(DstMem)[host_origin] = buff_mem;
+        if (IsRead)
+          host_mem = buff_mem;
         else
-          buff_mem = ur_cast<const int8_t *>(DstMem)[host_origin];
+          buff_mem = host_mem;
       }
   return UR_RESULT_SUCCESS;
 }
@@ -208,8 +219,6 @@ static inline ur_result_t doCopy_impl(ur_queue_handle_t hQueue, void *DstPtr,
                                       const ur_event_handle_t *EventWaitList,
                                       ur_event_handle_t *Event) {
   // todo: non-blocking, events, UR integration
-  std::ignore = EventWaitList;
-  std::ignore = Event;
   std::ignore = hQueue;
   std::ignore = numEventsInWaitList;
   if (SrcPtr != DstPtr && Size)
