@@ -139,7 +139,6 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
                       kernel._subhandler(kernel._args.data(), &state);
               }));
         }
-#endif
       }
     }
   }
