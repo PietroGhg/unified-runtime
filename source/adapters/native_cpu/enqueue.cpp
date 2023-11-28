@@ -5,7 +5,6 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-
 #include <array>
 #include <cstdint>
 
@@ -140,6 +139,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
                       kernel._subhandler(kernel._args.data(), &state);
               }));
         }
+#endif
       }
     }
   }
