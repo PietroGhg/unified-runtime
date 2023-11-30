@@ -68,6 +68,8 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
   // TODO: add proper error checking
   // TODO: add proper event dep management
   native_cpu::NDRDescT ndr(workDim, pGlobalWorkOffset, pGlobalWorkSize, pLocalWorkSize);
+  //std::cout << "kernel: " << hKernel->_name << "\n";
+  //ndr.dump(std::cout);
   auto& tp = hQueue->device->tp;
   const size_t numParallelThreads = tp.num_threads();
   hKernel->updateMemPool(numParallelThreads);
@@ -126,18 +128,32 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
     }
 
   } else {
-    for (unsigned g2 = 0; g2 < numWG2; g2++) {
-      for (unsigned g1 = 0; g1 < numWG1; g1++) {
-        for (unsigned g0 = 0; g0 < numWG0; g0++) {
-          // Todo: this schedules one work group at a time, we could schedule
-          // groups of work groups in order to reduce synchronization overhead.
-          futures.emplace_back(tp.schedule_task(
-              [state, kernel = *hKernel, g0, g1, g2, numParallelThreads
-                   ](size_t threadId) mutable {
-                kernel.handleLocalArgs(numParallelThreads, threadId);
-                      state.update(g0, g1, g2);
-                      kernel._subhandler(kernel._args.data(), &state);
-              }));
+    if (numWG1 * numWG2 >= numParallelThreads) {
+      for (unsigned g2 = 0; g2 < numWG2; g2++) {
+        for (unsigned g1 = 0; g1 < numWG1; g1++) {
+            futures.emplace_back(tp.schedule_task(
+                [state, kernel = *hKernel, numWG0, g1, g2, numParallelThreads
+                     ](size_t threadId) mutable {
+          for (unsigned g0 = 0; g0 < numWG0; g0++) {
+                  kernel.handleLocalArgs(numParallelThreads, threadId);
+                        state.update(g0, g1, g2);
+                        kernel._subhandler(kernel._args.data(), &state);
+                }}));
+          
+        }
+      }
+    } else {
+      for (unsigned g2 = 0; g2 < numWG2; g2++) {
+        for (unsigned g1 = 0; g1 < numWG1; g1++) {
+          for (unsigned g0 = 0; g0 < numWG0; g0++) {
+            futures.emplace_back(tp.schedule_task(
+                [state, kernel = *hKernel, g0, g1, g2, numParallelThreads
+                     ](size_t threadId) mutable {
+                  kernel.handleLocalArgs(numParallelThreads, threadId);
+                        state.update(g0, g1, g2);
+                        kernel._subhandler(kernel._args.data(), &state);
+                }));
+          }
         }
       }
     }
