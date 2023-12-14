@@ -6,7 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "ur_api.h"
 
@@ -68,12 +70,11 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
   // TODO: add proper error checking
   // TODO: add proper event dep management
   native_cpu::NDRDescT ndr(workDim, pGlobalWorkOffset, pGlobalWorkSize, pLocalWorkSize);
-  //std::cout << "kernel: " << hKernel->_name << "\n";
-  //ndr.dump(std::cout);
   auto& tp = hQueue->device->tp;
   const size_t numParallelThreads = tp.num_threads();
   hKernel->updateMemPool(numParallelThreads);
   std::vector<std::future<void>> futures;
+  std::vector<std::function<void(size_t)>> groups;
   auto numWG0 = ndr.GlobalSize[0] / ndr.LocalSize[0];
   auto numWG1 = ndr.GlobalSize[1] / ndr.LocalSize[1];
   auto numWG2 = ndr.GlobalSize[2] / ndr.LocalSize[2];
@@ -146,16 +147,35 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
       for (unsigned g2 = 0; g2 < numWG2; g2++) {
         for (unsigned g1 = 0; g1 < numWG1; g1++) {
           for (unsigned g0 = 0; g0 < numWG0; g0++) {
-            futures.emplace_back(tp.schedule_task(
-                [state, kernel = *hKernel, g0, g1, g2, numParallelThreads
+            groups.push_back([state, kernel = *hKernel, g0, g1, g2, numParallelThreads
                      ](size_t threadId) mutable {
                   kernel.handleLocalArgs(numParallelThreads, threadId);
                         state.update(g0, g1, g2);
                         kernel._subhandler(kernel._args.data(), &state);
-                }));
+                });
           }
         }
       }
+      auto numGroups = groups.size();
+      auto groupsPerThread = numGroups / numParallelThreads;
+      auto remainder = numGroups % numParallelThreads;
+      for(unsigned thread = 0; thread < numParallelThreads; thread++) {
+        futures.emplace_back(tp.schedule_task([&groups, thread, groupsPerThread](size_t threadId) {
+                for(unsigned i = 0; i < groupsPerThread; i++) {
+                  auto index = thread * groupsPerThread + i;
+                  groups[index](threadId);
+                }
+              }));
+      }
+
+      // schedule the remaining tasks
+      futures.emplace_back(tp.schedule_task([&groups, remainder, scheduled = numParallelThreads*groupsPerThread](size_t threadId) {
+            for(unsigned i = 0; i < remainder; i++) {
+              auto index = scheduled + i;
+              groups[index](threadId);
+            }
+            }));
+
     }
   }
 

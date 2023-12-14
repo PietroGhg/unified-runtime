@@ -45,8 +45,7 @@ struct ur_kernel_handle_t_ : RefCounted {
   }
 
   ~ur_kernel_handle_t_() {
-    decrementReferenceCount();
-    if (_refCount == 0) {
+    if (decrementReferenceCount() == 0) {
       free(_localMemPool);
     }
   
