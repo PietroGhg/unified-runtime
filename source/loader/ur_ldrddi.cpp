@@ -65,6 +65,9 @@ __urdlllocal ur_result_t UR_APICALL urAdapterGet(
                 break;
             }
             adapterIndex++;
+            if (adapterIndex == NumEntries) {
+                break;
+            }
         }
     }
 
@@ -349,14 +352,6 @@ __urdlllocal ur_result_t UR_APICALL urPlatformGetNativeHandle(
         return result;
     }
 
-    try {
-        // convert platform handle to loader handle
-        *phNativePlatform = reinterpret_cast<ur_native_handle_t>(
-            ur_native_factory.getInstance(*phNativePlatform, dditable));
-    } catch (std::bad_alloc &) {
-        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
-    }
-
     return result;
 }
 
@@ -511,8 +506,53 @@ __urdlllocal ur_result_t UR_APICALL urDeviceGetInfo(
     // convert loader handle to platform handle
     hDevice = reinterpret_cast<ur_device_object_t *>(hDevice)->handle;
 
+    // this value is needed for converting adapter handles to loader handles
+    size_t sizeret = 0;
+    if (pPropSizeRet == NULL) {
+        pPropSizeRet = &sizeret;
+    }
+
     // forward to device-platform
     result = pfnGetInfo(hDevice, propName, propSize, pPropValue, pPropSizeRet);
+
+    if (UR_RESULT_SUCCESS != result) {
+        return result;
+    }
+
+    try {
+        if (pPropValue != nullptr) {
+            switch (propName) {
+            case UR_DEVICE_INFO_PLATFORM: {
+                ur_platform_handle_t *handles =
+                    reinterpret_cast<ur_platform_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_platform_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_platform_handle_t>(
+                            ur_platform_factory.getInstance(handles[i],
+                                                            dditable));
+                    }
+                }
+            } break;
+            case UR_DEVICE_INFO_PARENT_DEVICE: {
+                ur_device_handle_t *handles =
+                    reinterpret_cast<ur_device_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_device_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_device_handle_t>(
+                            ur_device_factory.getInstance(handles[i],
+                                                          dditable));
+                    }
+                }
+            } break;
+            default: {
+            } break;
+            }
+        }
+    } catch (std::bad_alloc &) {
+        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
+    }
 
     return result;
 }
@@ -670,14 +710,6 @@ __urdlllocal ur_result_t UR_APICALL urDeviceGetNativeHandle(
         return result;
     }
 
-    try {
-        // convert platform handle to loader handle
-        *phNativeDevice = reinterpret_cast<ur_native_handle_t>(
-            ur_native_factory.getInstance(*phNativeDevice, dditable));
-    } catch (std::bad_alloc &) {
-        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
-    }
-
     return result;
 }
 
@@ -696,16 +728,12 @@ __urdlllocal ur_result_t UR_APICALL urDeviceCreateWithNativeHandle(
 
     // extract platform's function pointer table
     auto dditable =
-        reinterpret_cast<ur_native_object_t *>(hNativeDevice)->dditable;
+        reinterpret_cast<ur_platform_object_t *>(hPlatform)->dditable;
     auto pfnCreateWithNativeHandle =
         dditable->ur.Device.pfnCreateWithNativeHandle;
     if (nullptr == pfnCreateWithNativeHandle) {
         return UR_RESULT_ERROR_UNINITIALIZED;
     }
-
-    // convert loader handle to platform handle
-    hNativeDevice =
-        reinterpret_cast<ur_native_object_t *>(hNativeDevice)->handle;
 
     // convert loader handle to platform handle
     hPlatform = reinterpret_cast<ur_platform_object_t *>(hPlatform)->handle;
@@ -881,8 +909,41 @@ __urdlllocal ur_result_t UR_APICALL urContextGetInfo(
     // convert loader handle to platform handle
     hContext = reinterpret_cast<ur_context_object_t *>(hContext)->handle;
 
+    // this value is needed for converting adapter handles to loader handles
+    size_t sizeret = 0;
+    if (pPropSizeRet == NULL) {
+        pPropSizeRet = &sizeret;
+    }
+
     // forward to device-platform
     result = pfnGetInfo(hContext, propName, propSize, pPropValue, pPropSizeRet);
+
+    if (UR_RESULT_SUCCESS != result) {
+        return result;
+    }
+
+    try {
+        if (pPropValue != nullptr) {
+            switch (propName) {
+            case UR_CONTEXT_INFO_DEVICES: {
+                ur_device_handle_t *handles =
+                    reinterpret_cast<ur_device_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_device_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_device_handle_t>(
+                            ur_device_factory.getInstance(handles[i],
+                                                          dditable));
+                    }
+                }
+            } break;
+            default: {
+            } break;
+            }
+        }
+    } catch (std::bad_alloc &) {
+        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
+    }
 
     return result;
 }
@@ -913,14 +974,6 @@ __urdlllocal ur_result_t UR_APICALL urContextGetNativeHandle(
         return result;
     }
 
-    try {
-        // convert platform handle to loader handle
-        *phNativeContext = reinterpret_cast<ur_native_handle_t>(
-            ur_native_factory.getInstance(*phNativeContext, dditable));
-    } catch (std::bad_alloc &) {
-        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
-    }
-
     return result;
 }
 
@@ -941,16 +994,12 @@ __urdlllocal ur_result_t UR_APICALL urContextCreateWithNativeHandle(
 
     // extract platform's function pointer table
     auto dditable =
-        reinterpret_cast<ur_native_object_t *>(hNativeContext)->dditable;
+        reinterpret_cast<ur_device_object_t *>(*phDevices)->dditable;
     auto pfnCreateWithNativeHandle =
         dditable->ur.Context.pfnCreateWithNativeHandle;
     if (nullptr == pfnCreateWithNativeHandle) {
         return UR_RESULT_ERROR_UNINITIALIZED;
     }
-
-    // convert loader handle to platform handle
-    hNativeContext =
-        reinterpret_cast<ur_native_object_t *>(hNativeContext)->handle;
 
     // convert loader handles to platform handles
     auto phDevicesLocal = std::vector<ur_device_handle_t>(numDevices);
@@ -1204,14 +1253,6 @@ __urdlllocal ur_result_t UR_APICALL urMemGetNativeHandle(
         return result;
     }
 
-    try {
-        // convert platform handle to loader handle
-        *phNativeMem = reinterpret_cast<ur_native_handle_t>(
-            ur_native_factory.getInstance(*phNativeMem, dditable));
-    } catch (std::bad_alloc &) {
-        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
-    }
-
     return result;
 }
 
@@ -1229,16 +1270,12 @@ __urdlllocal ur_result_t UR_APICALL urMemBufferCreateWithNativeHandle(
     ur_result_t result = UR_RESULT_SUCCESS;
 
     // extract platform's function pointer table
-    auto dditable =
-        reinterpret_cast<ur_native_object_t *>(hNativeMem)->dditable;
+    auto dditable = reinterpret_cast<ur_context_object_t *>(hContext)->dditable;
     auto pfnBufferCreateWithNativeHandle =
         dditable->ur.Mem.pfnBufferCreateWithNativeHandle;
     if (nullptr == pfnBufferCreateWithNativeHandle) {
         return UR_RESULT_ERROR_UNINITIALIZED;
     }
-
-    // convert loader handle to platform handle
-    hNativeMem = reinterpret_cast<ur_native_object_t *>(hNativeMem)->handle;
 
     // convert loader handle to platform handle
     hContext = reinterpret_cast<ur_context_object_t *>(hContext)->handle;
@@ -1279,16 +1316,12 @@ __urdlllocal ur_result_t UR_APICALL urMemImageCreateWithNativeHandle(
     ur_result_t result = UR_RESULT_SUCCESS;
 
     // extract platform's function pointer table
-    auto dditable =
-        reinterpret_cast<ur_native_object_t *>(hNativeMem)->dditable;
+    auto dditable = reinterpret_cast<ur_context_object_t *>(hContext)->dditable;
     auto pfnImageCreateWithNativeHandle =
         dditable->ur.Mem.pfnImageCreateWithNativeHandle;
     if (nullptr == pfnImageCreateWithNativeHandle) {
         return UR_RESULT_ERROR_UNINITIALIZED;
     }
-
-    // convert loader handle to platform handle
-    hNativeMem = reinterpret_cast<ur_native_object_t *>(hNativeMem)->handle;
 
     // convert loader handle to platform handle
     hContext = reinterpret_cast<ur_context_object_t *>(hContext)->handle;
@@ -1341,8 +1374,41 @@ __urdlllocal ur_result_t UR_APICALL urMemGetInfo(
     // convert loader handle to platform handle
     hMemory = reinterpret_cast<ur_mem_object_t *>(hMemory)->handle;
 
+    // this value is needed for converting adapter handles to loader handles
+    size_t sizeret = 0;
+    if (pPropSizeRet == NULL) {
+        pPropSizeRet = &sizeret;
+    }
+
     // forward to device-platform
     result = pfnGetInfo(hMemory, propName, propSize, pPropValue, pPropSizeRet);
+
+    if (UR_RESULT_SUCCESS != result) {
+        return result;
+    }
+
+    try {
+        if (pPropValue != nullptr) {
+            switch (propName) {
+            case UR_MEM_INFO_CONTEXT: {
+                ur_context_handle_t *handles =
+                    reinterpret_cast<ur_context_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_context_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_context_handle_t>(
+                            ur_context_factory.getInstance(handles[i],
+                                                           dditable));
+                    }
+                }
+            } break;
+            default: {
+            } break;
+            }
+        }
+    } catch (std::bad_alloc &) {
+        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
+    }
 
     return result;
 }
@@ -1493,8 +1559,41 @@ __urdlllocal ur_result_t UR_APICALL urSamplerGetInfo(
     // convert loader handle to platform handle
     hSampler = reinterpret_cast<ur_sampler_object_t *>(hSampler)->handle;
 
+    // this value is needed for converting adapter handles to loader handles
+    size_t sizeret = 0;
+    if (pPropSizeRet == NULL) {
+        pPropSizeRet = &sizeret;
+    }
+
     // forward to device-platform
     result = pfnGetInfo(hSampler, propName, propSize, pPropValue, pPropSizeRet);
+
+    if (UR_RESULT_SUCCESS != result) {
+        return result;
+    }
+
+    try {
+        if (pPropValue != nullptr) {
+            switch (propName) {
+            case UR_SAMPLER_INFO_CONTEXT: {
+                ur_context_handle_t *handles =
+                    reinterpret_cast<ur_context_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_context_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_context_handle_t>(
+                            ur_context_factory.getInstance(handles[i],
+                                                           dditable));
+                    }
+                }
+            } break;
+            default: {
+            } break;
+            }
+        }
+    } catch (std::bad_alloc &) {
+        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
+    }
 
     return result;
 }
@@ -1525,14 +1624,6 @@ __urdlllocal ur_result_t UR_APICALL urSamplerGetNativeHandle(
         return result;
     }
 
-    try {
-        // convert platform handle to loader handle
-        *phNativeSampler = reinterpret_cast<ur_native_handle_t>(
-            ur_native_factory.getInstance(*phNativeSampler, dditable));
-    } catch (std::bad_alloc &) {
-        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
-    }
-
     return result;
 }
 
@@ -1550,17 +1641,12 @@ __urdlllocal ur_result_t UR_APICALL urSamplerCreateWithNativeHandle(
     ur_result_t result = UR_RESULT_SUCCESS;
 
     // extract platform's function pointer table
-    auto dditable =
-        reinterpret_cast<ur_native_object_t *>(hNativeSampler)->dditable;
+    auto dditable = reinterpret_cast<ur_context_object_t *>(hContext)->dditable;
     auto pfnCreateWithNativeHandle =
         dditable->ur.Sampler.pfnCreateWithNativeHandle;
     if (nullptr == pfnCreateWithNativeHandle) {
         return UR_RESULT_ERROR_UNINITIALIZED;
     }
-
-    // convert loader handle to platform handle
-    hNativeSampler =
-        reinterpret_cast<ur_native_object_t *>(hNativeSampler)->handle;
 
     // convert loader handle to platform handle
     hContext = reinterpret_cast<ur_context_object_t *>(hContext)->handle;
@@ -1745,9 +1831,54 @@ __urdlllocal ur_result_t UR_APICALL urUSMGetMemAllocInfo(
     // convert loader handle to platform handle
     hContext = reinterpret_cast<ur_context_object_t *>(hContext)->handle;
 
+    // this value is needed for converting adapter handles to loader handles
+    size_t sizeret = 0;
+    if (pPropSizeRet == NULL) {
+        pPropSizeRet = &sizeret;
+    }
+
     // forward to device-platform
     result = pfnGetMemAllocInfo(hContext, pMem, propName, propSize, pPropValue,
                                 pPropSizeRet);
+
+    if (UR_RESULT_SUCCESS != result) {
+        return result;
+    }
+
+    try {
+        if (pPropValue != nullptr) {
+            switch (propName) {
+            case UR_USM_ALLOC_INFO_DEVICE: {
+                ur_device_handle_t *handles =
+                    reinterpret_cast<ur_device_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_device_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_device_handle_t>(
+                            ur_device_factory.getInstance(handles[i],
+                                                          dditable));
+                    }
+                }
+            } break;
+            case UR_USM_ALLOC_INFO_POOL: {
+                ur_usm_pool_handle_t *handles =
+                    reinterpret_cast<ur_usm_pool_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_usm_pool_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_usm_pool_handle_t>(
+                            ur_usm_pool_factory.getInstance(handles[i],
+                                                            dditable));
+                    }
+                }
+            } break;
+            default: {
+            } break;
+            }
+        }
+    } catch (std::bad_alloc &) {
+        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
+    }
 
     return result;
 }
@@ -1861,9 +1992,42 @@ __urdlllocal ur_result_t UR_APICALL urUSMPoolGetInfo(
     // convert loader handle to platform handle
     hPool = reinterpret_cast<ur_usm_pool_object_t *>(hPool)->handle;
 
+    // this value is needed for converting adapter handles to loader handles
+    size_t sizeret = 0;
+    if (pPropSizeRet == NULL) {
+        pPropSizeRet = &sizeret;
+    }
+
     // forward to device-platform
     result =
         pfnPoolGetInfo(hPool, propName, propSize, pPropValue, pPropSizeRet);
+
+    if (UR_RESULT_SUCCESS != result) {
+        return result;
+    }
+
+    try {
+        if (pPropValue != nullptr) {
+            switch (propName) {
+            case UR_USM_POOL_INFO_CONTEXT: {
+                ur_context_handle_t *handles =
+                    reinterpret_cast<ur_context_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_context_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_context_handle_t>(
+                            ur_context_factory.getInstance(handles[i],
+                                                           dditable));
+                    }
+                }
+            } break;
+            default: {
+            } break;
+            }
+        }
+    } catch (std::bad_alloc &) {
+        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
+    }
 
     return result;
 }
@@ -2501,8 +2665,53 @@ __urdlllocal ur_result_t UR_APICALL urProgramGetInfo(
     // convert loader handle to platform handle
     hProgram = reinterpret_cast<ur_program_object_t *>(hProgram)->handle;
 
+    // this value is needed for converting adapter handles to loader handles
+    size_t sizeret = 0;
+    if (pPropSizeRet == NULL) {
+        pPropSizeRet = &sizeret;
+    }
+
     // forward to device-platform
     result = pfnGetInfo(hProgram, propName, propSize, pPropValue, pPropSizeRet);
+
+    if (UR_RESULT_SUCCESS != result) {
+        return result;
+    }
+
+    try {
+        if (pPropValue != nullptr) {
+            switch (propName) {
+            case UR_PROGRAM_INFO_CONTEXT: {
+                ur_context_handle_t *handles =
+                    reinterpret_cast<ur_context_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_context_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_context_handle_t>(
+                            ur_context_factory.getInstance(handles[i],
+                                                           dditable));
+                    }
+                }
+            } break;
+            case UR_PROGRAM_INFO_DEVICES: {
+                ur_device_handle_t *handles =
+                    reinterpret_cast<ur_device_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_device_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_device_handle_t>(
+                            ur_device_factory.getInstance(handles[i],
+                                                          dditable));
+                    }
+                }
+            } break;
+            default: {
+            } break;
+            }
+        }
+    } catch (std::bad_alloc &) {
+        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
+    }
 
     return result;
 }
@@ -2601,14 +2810,6 @@ __urdlllocal ur_result_t UR_APICALL urProgramGetNativeHandle(
         return result;
     }
 
-    try {
-        // convert platform handle to loader handle
-        *phNativeProgram = reinterpret_cast<ur_native_handle_t>(
-            ur_native_factory.getInstance(*phNativeProgram, dditable));
-    } catch (std::bad_alloc &) {
-        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
-    }
-
     return result;
 }
 
@@ -2626,17 +2827,12 @@ __urdlllocal ur_result_t UR_APICALL urProgramCreateWithNativeHandle(
     ur_result_t result = UR_RESULT_SUCCESS;
 
     // extract platform's function pointer table
-    auto dditable =
-        reinterpret_cast<ur_native_object_t *>(hNativeProgram)->dditable;
+    auto dditable = reinterpret_cast<ur_context_object_t *>(hContext)->dditable;
     auto pfnCreateWithNativeHandle =
         dditable->ur.Program.pfnCreateWithNativeHandle;
     if (nullptr == pfnCreateWithNativeHandle) {
         return UR_RESULT_ERROR_UNINITIALIZED;
     }
-
-    // convert loader handle to platform handle
-    hNativeProgram =
-        reinterpret_cast<ur_native_object_t *>(hNativeProgram)->handle;
 
     // convert loader handle to platform handle
     hContext = reinterpret_cast<ur_context_object_t *>(hContext)->handle;
@@ -2784,8 +2980,53 @@ __urdlllocal ur_result_t UR_APICALL urKernelGetInfo(
     // convert loader handle to platform handle
     hKernel = reinterpret_cast<ur_kernel_object_t *>(hKernel)->handle;
 
+    // this value is needed for converting adapter handles to loader handles
+    size_t sizeret = 0;
+    if (pPropSizeRet == NULL) {
+        pPropSizeRet = &sizeret;
+    }
+
     // forward to device-platform
     result = pfnGetInfo(hKernel, propName, propSize, pPropValue, pPropSizeRet);
+
+    if (UR_RESULT_SUCCESS != result) {
+        return result;
+    }
+
+    try {
+        if (pPropValue != nullptr) {
+            switch (propName) {
+            case UR_KERNEL_INFO_CONTEXT: {
+                ur_context_handle_t *handles =
+                    reinterpret_cast<ur_context_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_context_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_context_handle_t>(
+                            ur_context_factory.getInstance(handles[i],
+                                                           dditable));
+                    }
+                }
+            } break;
+            case UR_KERNEL_INFO_PROGRAM: {
+                ur_program_handle_t *handles =
+                    reinterpret_cast<ur_program_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_program_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_program_handle_t>(
+                            ur_program_factory.getInstance(handles[i],
+                                                           dditable));
+                    }
+                }
+            } break;
+            default: {
+            } break;
+            }
+        }
+    } catch (std::bad_alloc &) {
+        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
+    }
 
     return result;
 }
@@ -3085,14 +3326,6 @@ __urdlllocal ur_result_t UR_APICALL urKernelGetNativeHandle(
         return result;
     }
 
-    try {
-        // convert platform handle to loader handle
-        *phNativeKernel = reinterpret_cast<ur_native_handle_t>(
-            ur_native_factory.getInstance(*phNativeKernel, dditable));
-    } catch (std::bad_alloc &) {
-        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
-    }
-
     return result;
 }
 
@@ -3112,17 +3345,12 @@ __urdlllocal ur_result_t UR_APICALL urKernelCreateWithNativeHandle(
     ur_result_t result = UR_RESULT_SUCCESS;
 
     // extract platform's function pointer table
-    auto dditable =
-        reinterpret_cast<ur_native_object_t *>(hNativeKernel)->dditable;
+    auto dditable = reinterpret_cast<ur_context_object_t *>(hContext)->dditable;
     auto pfnCreateWithNativeHandle =
         dditable->ur.Kernel.pfnCreateWithNativeHandle;
     if (nullptr == pfnCreateWithNativeHandle) {
         return UR_RESULT_ERROR_UNINITIALIZED;
     }
-
-    // convert loader handle to platform handle
-    hNativeKernel =
-        reinterpret_cast<ur_native_object_t *>(hNativeKernel)->handle;
 
     // convert loader handle to platform handle
     hContext = reinterpret_cast<ur_context_object_t *>(hContext)->handle;
@@ -3174,8 +3402,64 @@ __urdlllocal ur_result_t UR_APICALL urQueueGetInfo(
     // convert loader handle to platform handle
     hQueue = reinterpret_cast<ur_queue_object_t *>(hQueue)->handle;
 
+    // this value is needed for converting adapter handles to loader handles
+    size_t sizeret = 0;
+    if (pPropSizeRet == NULL) {
+        pPropSizeRet = &sizeret;
+    }
+
     // forward to device-platform
     result = pfnGetInfo(hQueue, propName, propSize, pPropValue, pPropSizeRet);
+
+    if (UR_RESULT_SUCCESS != result) {
+        return result;
+    }
+
+    try {
+        if (pPropValue != nullptr) {
+            switch (propName) {
+            case UR_QUEUE_INFO_CONTEXT: {
+                ur_context_handle_t *handles =
+                    reinterpret_cast<ur_context_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_context_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_context_handle_t>(
+                            ur_context_factory.getInstance(handles[i],
+                                                           dditable));
+                    }
+                }
+            } break;
+            case UR_QUEUE_INFO_DEVICE: {
+                ur_device_handle_t *handles =
+                    reinterpret_cast<ur_device_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_device_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_device_handle_t>(
+                            ur_device_factory.getInstance(handles[i],
+                                                          dditable));
+                    }
+                }
+            } break;
+            case UR_QUEUE_INFO_DEVICE_DEFAULT: {
+                ur_queue_handle_t *handles =
+                    reinterpret_cast<ur_queue_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_queue_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_queue_handle_t>(
+                            ur_queue_factory.getInstance(handles[i], dditable));
+                    }
+                }
+            } break;
+            default: {
+            } break;
+            }
+        }
+    } catch (std::bad_alloc &) {
+        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
+    }
 
     return result;
 }
@@ -3297,14 +3581,6 @@ __urdlllocal ur_result_t UR_APICALL urQueueGetNativeHandle(
         return result;
     }
 
-    try {
-        // convert platform handle to loader handle
-        *phNativeQueue = reinterpret_cast<ur_native_handle_t>(
-            ur_native_factory.getInstance(*phNativeQueue, dditable));
-    } catch (std::bad_alloc &) {
-        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
-    }
-
     return result;
 }
 
@@ -3323,16 +3599,12 @@ __urdlllocal ur_result_t UR_APICALL urQueueCreateWithNativeHandle(
     ur_result_t result = UR_RESULT_SUCCESS;
 
     // extract platform's function pointer table
-    auto dditable =
-        reinterpret_cast<ur_native_object_t *>(hNativeQueue)->dditable;
+    auto dditable = reinterpret_cast<ur_context_object_t *>(hContext)->dditable;
     auto pfnCreateWithNativeHandle =
         dditable->ur.Queue.pfnCreateWithNativeHandle;
     if (nullptr == pfnCreateWithNativeHandle) {
         return UR_RESULT_ERROR_UNINITIALIZED;
     }
-
-    // convert loader handle to platform handle
-    hNativeQueue = reinterpret_cast<ur_native_object_t *>(hNativeQueue)->handle;
 
     // convert loader handle to platform handle
     hContext = reinterpret_cast<ur_context_object_t *>(hContext)->handle;
@@ -3428,8 +3700,52 @@ __urdlllocal ur_result_t UR_APICALL urEventGetInfo(
     // convert loader handle to platform handle
     hEvent = reinterpret_cast<ur_event_object_t *>(hEvent)->handle;
 
+    // this value is needed for converting adapter handles to loader handles
+    size_t sizeret = 0;
+    if (pPropSizeRet == NULL) {
+        pPropSizeRet = &sizeret;
+    }
+
     // forward to device-platform
     result = pfnGetInfo(hEvent, propName, propSize, pPropValue, pPropSizeRet);
+
+    if (UR_RESULT_SUCCESS != result) {
+        return result;
+    }
+
+    try {
+        if (pPropValue != nullptr) {
+            switch (propName) {
+            case UR_EVENT_INFO_COMMAND_QUEUE: {
+                ur_queue_handle_t *handles =
+                    reinterpret_cast<ur_queue_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_queue_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_queue_handle_t>(
+                            ur_queue_factory.getInstance(handles[i], dditable));
+                    }
+                }
+            } break;
+            case UR_EVENT_INFO_CONTEXT: {
+                ur_context_handle_t *handles =
+                    reinterpret_cast<ur_context_handle_t *>(pPropValue);
+                size_t nelements = *pPropSizeRet / sizeof(ur_context_handle_t);
+                for (size_t i = 0; i < nelements; ++i) {
+                    if (handles[i] != nullptr) {
+                        handles[i] = reinterpret_cast<ur_context_handle_t>(
+                            ur_context_factory.getInstance(handles[i],
+                                                           dditable));
+                    }
+                }
+            } break;
+            default: {
+            } break;
+            }
+        }
+    } catch (std::bad_alloc &) {
+        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
+    }
 
     return result;
 }
@@ -3570,14 +3886,6 @@ __urdlllocal ur_result_t UR_APICALL urEventGetNativeHandle(
         return result;
     }
 
-    try {
-        // convert platform handle to loader handle
-        *phNativeEvent = reinterpret_cast<ur_native_handle_t>(
-            ur_native_factory.getInstance(*phNativeEvent, dditable));
-    } catch (std::bad_alloc &) {
-        result = UR_RESULT_ERROR_OUT_OF_HOST_MEMORY;
-    }
-
     return result;
 }
 
@@ -3595,16 +3903,12 @@ __urdlllocal ur_result_t UR_APICALL urEventCreateWithNativeHandle(
     ur_result_t result = UR_RESULT_SUCCESS;
 
     // extract platform's function pointer table
-    auto dditable =
-        reinterpret_cast<ur_native_object_t *>(hNativeEvent)->dditable;
+    auto dditable = reinterpret_cast<ur_context_object_t *>(hContext)->dditable;
     auto pfnCreateWithNativeHandle =
         dditable->ur.Event.pfnCreateWithNativeHandle;
     if (nullptr == pfnCreateWithNativeHandle) {
         return UR_RESULT_ERROR_UNINITIALIZED;
     }
-
-    // convert loader handle to platform handle
-    hNativeEvent = reinterpret_cast<ur_native_object_t *>(hNativeEvent)->handle;
 
     // convert loader handle to platform handle
     hContext = reinterpret_cast<ur_context_object_t *>(hContext)->handle;
@@ -3849,7 +4153,8 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueEventsWaitWithBarrier(
 /// @brief Intercept function for urEnqueueMemBufferRead
 __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferRead(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue object
-    ur_mem_handle_t hBuffer,  ///< [in] handle of the buffer object
+    ur_mem_handle_t
+        hBuffer, ///< [in][bounds(offset, size)] handle of the buffer object
     bool blockingRead, ///< [in] indicates blocking (true), non-blocking (false)
     size_t offset,     ///< [in] offset in bytes in the buffer object
     size_t size,       ///< [in] size in bytes of data being read
@@ -3913,7 +4218,8 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferRead(
 /// @brief Intercept function for urEnqueueMemBufferWrite
 __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferWrite(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue object
-    ur_mem_handle_t hBuffer,  ///< [in] handle of the buffer object
+    ur_mem_handle_t
+        hBuffer, ///< [in][bounds(offset, size)] handle of the buffer object
     bool
         blockingWrite, ///< [in] indicates blocking (true), non-blocking (false)
     size_t offset,     ///< [in] offset in bytes in the buffer object
@@ -3979,7 +4285,8 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferWrite(
 /// @brief Intercept function for urEnqueueMemBufferReadRect
 __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferReadRect(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue object
-    ur_mem_handle_t hBuffer,  ///< [in] handle of the buffer object
+    ur_mem_handle_t
+        hBuffer, ///< [in][bounds(bufferOrigin, region)] handle of the buffer object
     bool blockingRead, ///< [in] indicates blocking (true), non-blocking (false)
     ur_rect_offset_t bufferOrigin, ///< [in] 3D offset in the buffer
     ur_rect_offset_t hostOrigin,   ///< [in] 3D offset in the host region
@@ -4056,7 +4363,8 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferReadRect(
 /// @brief Intercept function for urEnqueueMemBufferWriteRect
 __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferWriteRect(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue object
-    ur_mem_handle_t hBuffer,  ///< [in] handle of the buffer object
+    ur_mem_handle_t
+        hBuffer, ///< [in][bounds(bufferOrigin, region)] handle of the buffer object
     bool
         blockingWrite, ///< [in] indicates blocking (true), non-blocking (false)
     ur_rect_offset_t bufferOrigin, ///< [in] 3D offset in the buffer
@@ -4135,9 +4443,11 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferWriteRect(
 ///////////////////////////////////////////////////////////////////////////////
 /// @brief Intercept function for urEnqueueMemBufferCopy
 __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferCopy(
-    ur_queue_handle_t hQueue,   ///< [in] handle of the queue object
-    ur_mem_handle_t hBufferSrc, ///< [in] handle of the src buffer object
-    ur_mem_handle_t hBufferDst, ///< [in] handle of the dest buffer object
+    ur_queue_handle_t hQueue, ///< [in] handle of the queue object
+    ur_mem_handle_t
+        hBufferSrc, ///< [in][bounds(srcOffset, size)] handle of the src buffer object
+    ur_mem_handle_t
+        hBufferDst, ///< [in][bounds(dstOffset, size)] handle of the dest buffer object
     size_t srcOffset, ///< [in] offset into hBufferSrc to begin copying from
     size_t dstOffset, ///< [in] offset info hBufferDst to begin copying into
     size_t size,      ///< [in] size in bytes of data being copied
@@ -4202,9 +4512,11 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferCopy(
 ///////////////////////////////////////////////////////////////////////////////
 /// @brief Intercept function for urEnqueueMemBufferCopyRect
 __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferCopyRect(
-    ur_queue_handle_t hQueue,   ///< [in] handle of the queue object
-    ur_mem_handle_t hBufferSrc, ///< [in] handle of the source buffer object
-    ur_mem_handle_t hBufferDst, ///< [in] handle of the dest buffer object
+    ur_queue_handle_t hQueue, ///< [in] handle of the queue object
+    ur_mem_handle_t
+        hBufferSrc, ///< [in][bounds(srcOrigin, region)] handle of the source buffer object
+    ur_mem_handle_t
+        hBufferDst, ///< [in][bounds(dstOrigin, region)] handle of the dest buffer object
     ur_rect_offset_t srcOrigin, ///< [in] 3D offset in the source buffer
     ur_rect_offset_t dstOrigin, ///< [in] 3D offset in the destination buffer
     ur_rect_region_t
@@ -4280,10 +4592,11 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferCopyRect(
 /// @brief Intercept function for urEnqueueMemBufferFill
 __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferFill(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue object
-    ur_mem_handle_t hBuffer,  ///< [in] handle of the buffer object
-    const void *pPattern,     ///< [in] pointer to the fill pattern
-    size_t patternSize,       ///< [in] size in bytes of the pattern
-    size_t offset,            ///< [in] offset into the buffer
+    ur_mem_handle_t
+        hBuffer, ///< [in][bounds(offset, size)] handle of the buffer object
+    const void *pPattern, ///< [in] pointer to the fill pattern
+    size_t patternSize,   ///< [in] size in bytes of the pattern
+    size_t offset,        ///< [in] offset into the buffer
     size_t size, ///< [in] fill size in bytes, must be a multiple of patternSize
     uint32_t numEventsInWaitList, ///< [in] size of the event wait list
     const ur_event_handle_t *
@@ -4344,7 +4657,8 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferFill(
 /// @brief Intercept function for urEnqueueMemImageRead
 __urdlllocal ur_result_t UR_APICALL urEnqueueMemImageRead(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue object
-    ur_mem_handle_t hImage,   ///< [in] handle of the image object
+    ur_mem_handle_t
+        hImage, ///< [in][bounds(origin, region)] handle of the image object
     bool blockingRead, ///< [in] indicates blocking (true), non-blocking (false)
     ur_rect_offset_t
         origin, ///< [in] defines the (x,y,z) offset in pixels in the 1D, 2D, or 3D image
@@ -4413,7 +4727,8 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueMemImageRead(
 /// @brief Intercept function for urEnqueueMemImageWrite
 __urdlllocal ur_result_t UR_APICALL urEnqueueMemImageWrite(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue object
-    ur_mem_handle_t hImage,   ///< [in] handle of the image object
+    ur_mem_handle_t
+        hImage, ///< [in][bounds(origin, region)] handle of the image object
     bool
         blockingWrite, ///< [in] indicates blocking (true), non-blocking (false)
     ur_rect_offset_t
@@ -4482,9 +4797,11 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueMemImageWrite(
 ///////////////////////////////////////////////////////////////////////////////
 /// @brief Intercept function for urEnqueueMemImageCopy
 __urdlllocal ur_result_t UR_APICALL urEnqueueMemImageCopy(
-    ur_queue_handle_t hQueue,  ///< [in] handle of the queue object
-    ur_mem_handle_t hImageSrc, ///< [in] handle of the src image object
-    ur_mem_handle_t hImageDst, ///< [in] handle of the dest image object
+    ur_queue_handle_t hQueue, ///< [in] handle of the queue object
+    ur_mem_handle_t
+        hImageSrc, ///< [in][bounds(srcOrigin, region)] handle of the src image object
+    ur_mem_handle_t
+        hImageDst, ///< [in][bounds(dstOrigin, region)] handle of the dest image object
     ur_rect_offset_t
         srcOrigin, ///< [in] defines the (x,y,z) offset in pixels in the source 1D, 2D, or 3D
                    ///< image
@@ -4556,7 +4873,8 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueMemImageCopy(
 /// @brief Intercept function for urEnqueueMemBufferMap
 __urdlllocal ur_result_t UR_APICALL urEnqueueMemBufferMap(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue object
-    ur_mem_handle_t hBuffer,  ///< [in] handle of the buffer object
+    ur_mem_handle_t
+        hBuffer, ///< [in][bounds(offset, size)] handle of the buffer object
     bool blockingMap, ///< [in] indicates blocking (true), non-blocking (false)
     ur_map_flags_t mapFlags, ///< [in] flags for read, write, readwrite mapping
     size_t offset, ///< [in] offset in bytes of the buffer region being mapped
@@ -4683,7 +5001,7 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueMemUnmap(
 /// @brief Intercept function for urEnqueueUSMFill
 __urdlllocal ur_result_t UR_APICALL urEnqueueUSMFill(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue object
-    void *ptr,                ///< [in] pointer to USM memory object
+    void *pMem, ///< [in][bounds(0, size)] pointer to USM memory object
     size_t
         patternSize, ///< [in] the size in bytes of the pattern. Must be a power of 2 and less
                      ///< than or equal to width.
@@ -4723,7 +5041,7 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueUSMFill(
 
     // forward to device-platform
     result =
-        pfnUSMFill(hQueue, ptr, patternSize, pPattern, size,
+        pfnUSMFill(hQueue, pMem, patternSize, pPattern, size,
                    numEventsInWaitList, phEventWaitListLocal.data(), phEvent);
 
     if (UR_RESULT_SUCCESS != result) {
@@ -4748,9 +5066,11 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueUSMFill(
 __urdlllocal ur_result_t UR_APICALL urEnqueueUSMMemcpy(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue object
     bool blocking,            ///< [in] blocking or non-blocking copy
-    void *pDst,       ///< [in] pointer to the destination USM memory object
-    const void *pSrc, ///< [in] pointer to the source USM memory object
-    size_t size,      ///< [in] size in bytes to be copied
+    void *
+        pDst, ///< [in][bounds(0, size)] pointer to the destination USM memory object
+    const void *
+        pSrc, ///< [in][bounds(0, size)] pointer to the source USM memory object
+    size_t size,                  ///< [in] size in bytes to be copied
     uint32_t numEventsInWaitList, ///< [in] size of the event wait list
     const ur_event_handle_t *
         phEventWaitList, ///< [in][optional][range(0, numEventsInWaitList)] pointer to a list of
@@ -4806,9 +5126,10 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueUSMMemcpy(
 ///////////////////////////////////////////////////////////////////////////////
 /// @brief Intercept function for urEnqueueUSMPrefetch
 __urdlllocal ur_result_t UR_APICALL urEnqueueUSMPrefetch(
-    ur_queue_handle_t hQueue,       ///< [in] handle of the queue object
-    const void *pMem,               ///< [in] pointer to the USM memory object
-    size_t size,                    ///< [in] size in bytes to be fetched
+    ur_queue_handle_t hQueue, ///< [in] handle of the queue object
+    const void
+        *pMem,   ///< [in][bounds(0, size)] pointer to the USM memory object
+    size_t size, ///< [in] size in bytes to be fetched
     ur_usm_migration_flags_t flags, ///< [in] USM prefetch flags
     uint32_t numEventsInWaitList,   ///< [in] size of the event wait list
     const ur_event_handle_t *
@@ -4864,9 +5185,10 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueUSMPrefetch(
 ///////////////////////////////////////////////////////////////////////////////
 /// @brief Intercept function for urEnqueueUSMAdvise
 __urdlllocal ur_result_t UR_APICALL urEnqueueUSMAdvise(
-    ur_queue_handle_t hQueue,     ///< [in] handle of the queue object
-    const void *pMem,             ///< [in] pointer to the USM memory object
-    size_t size,                  ///< [in] size in bytes to be advised
+    ur_queue_handle_t hQueue, ///< [in] handle of the queue object
+    const void
+        *pMem,   ///< [in][bounds(0, size)] pointer to the USM memory object
+    size_t size, ///< [in] size in bytes to be advised
     ur_usm_advice_flags_t advice, ///< [in] USM memory advice
     ur_event_handle_t *
         phEvent ///< [out][optional] return an event object that identifies this particular
@@ -4908,7 +5230,8 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueUSMAdvise(
 /// @brief Intercept function for urEnqueueUSMFill2D
 __urdlllocal ur_result_t UR_APICALL urEnqueueUSMFill2D(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue to submit to.
-    void *pMem,               ///< [in] pointer to memory to be filled.
+    void *
+        pMem, ///< [in][bounds(0, pitch * height)] pointer to memory to be filled.
     size_t
         pitch, ///< [in] the total width of the destination memory including padding.
     size_t
@@ -4977,10 +5300,13 @@ __urdlllocal ur_result_t UR_APICALL urEnqueueUSMFill2D(
 __urdlllocal ur_result_t UR_APICALL urEnqueueUSMMemcpy2D(
     ur_queue_handle_t hQueue, ///< [in] handle of the queue to submit to.
     bool blocking, ///< [in] indicates if this operation should block the host.
-    void *pDst,    ///< [in] pointer to memory where data will be copied.
+    void *
+        pDst, ///< [in][bounds(0, dstPitch * height)] pointer to memory where data will
+              ///< be copied.
     size_t
         dstPitch, ///< [in] the total width of the source memory including padding.
-    const void *pSrc, ///< [in] pointer to memory to be copied.
+    const void *
+        pSrc, ///< [in][bounds(0, srcPitch * height)] pointer to memory to be copied.
     size_t
         srcPitch, ///< [in] the total width of the source memory including padding.
     size_t width,  ///< [in] the width in bytes of each row to be copied.

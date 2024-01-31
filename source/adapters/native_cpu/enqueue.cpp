@@ -26,7 +26,8 @@ struct NDRDescT {
   RangeT GlobalSize;
   RangeT LocalSize;
   NDRDescT(uint32_t WorkDim, const size_t *GlobalWorkOffset,
-           const size_t *GlobalWorkSize, const size_t *LocalWorkSize) {
+           const size_t *GlobalWorkSize, const size_t *LocalWorkSize)
+      : WorkDim(WorkDim) {
     for (uint32_t I = 0; I < WorkDim; I++) {
       GlobalOffset[I] = GlobalWorkOffset[I];
       GlobalSize[I] = GlobalWorkSize[I];
@@ -256,6 +257,8 @@ static inline ur_result_t doCopy_impl(ur_queue_handle_t hQueue, void *DstPtr,
   // todo: non-blocking, events, UR integration
   std::ignore = hQueue;
   std::ignore = numEventsInWaitList;
+  std::ignore = EventWaitList;
+  std::ignore = Event;
   if (SrcPtr != DstPtr && Size)
     memmove(DstPtr, SrcPtr, Size);
   return UR_RESULT_SUCCESS;

@@ -40,6 +40,13 @@ class obj_traits:
             return False
 
     @staticmethod
+    def is_enum(obj):
+        try:
+            return True if re.match(r"enum", obj['type']) else False
+        except:
+            return False
+
+    @staticmethod
     def is_experimental(obj):
         try:
             return True if re.search("Exp$", obj['name']) else False
@@ -356,6 +363,7 @@ class param_traits:
     RE_RELEASE  = r".*\[release\].*"
     RE_TYPENAME = r".*\[typename\((.+),\s(.+)\)\].*"
     RE_TAGGED   = r".*\[tagged_by\((.+)\)].*"
+    RE_BOUNDS   = r".*\[bounds\((.+),\s*(.+)\)].*"
 
     @classmethod
     def is_mbz(cls, item):
@@ -412,6 +420,13 @@ class param_traits:
             return True if re.match(cls.RE_TAGGED, item['desc']) else False
         except:
             return False
+
+    @classmethod
+    def is_bounds(cls, item):
+        try:
+            return True if re.match(cls.RE_BOUNDS, item['desc']) else False
+        except:
+            return False
     
     @classmethod
     def tagged_member(cls, item):
@@ -442,6 +457,13 @@ class param_traits:
             return False
 
     @classmethod
+    def is_typename(cls, item):
+        try:
+            return True if re.match(cls.RE_TYPENAME, item['desc']) else False
+        except:
+            return False
+
+    @classmethod
     def typename(cls, item):
         match = re.match(cls.RE_TYPENAME, item['desc'])
         if match:
@@ -452,6 +474,22 @@ class param_traits:
     @classmethod
     def typename_size(cls, item):
         match = re.match(cls.RE_TYPENAME, item['desc'])
+        if match:
+            return match.group(2)
+        else:
+            return None
+
+    @classmethod
+    def bounds_offset(cls, item):
+        match = re.match(cls.RE_BOUNDS, item['desc'])
+        if match:
+            return match.group(1)
+        else:
+            return None
+
+    @classmethod
+    def bounds_size(cls, item):
+        match = re.match(cls.RE_BOUNDS, item['desc'])
         if match:
             return match.group(2)
         else:
@@ -681,18 +719,8 @@ def make_flags_bitmask(namespace, tags, obj, meta):
 Public:
     returns c/c++ name of etor
 """
-def make_etor_name(namespace, tags, enum, etor, py=False, meta=None):
-    if py:
-        # e.g., "ENUM_NAME_ETOR_NAME" -> "ETOR_NAME"
-        if type_traits.is_flags(enum):
-            prefix = re.sub(r"(\w+)_flags_t", r"\1_flag", subt(namespace, tags, enum)).upper()
-        else:
-            prefix = re.sub(r"(\w+)_t", r"\1", subt(namespace, tags, enum)).upper()
-        name = re.sub(r"%s_(\w+)"%prefix, r"\1", subt(namespace, tags, etor))
-        name = re.sub(r"^(\d+\w*)", r"_\1", name)
-    else:
-        name = subt(namespace, tags, etor)
-    return name
+def make_etor_name(namespace, tags, enum, etor, meta=None):
+    return subt(namespace, tags, etor)
 
 """
 Private:
@@ -718,33 +746,28 @@ def _get_value_name(namespace, tags, value):
 Public:
     returns a list of strings for declaring each enumerator in an enumeration
     c++ format: "ETOR_NAME = VALUE, ///< DESCRIPTION"
-    python format: "ETOR_NAME = VALUE, ## DESCRIPTION"
 """
-def make_etor_lines(namespace, tags, obj, py=False, meta=None):
+def make_etor_lines(namespace, tags, obj, meta=None):
     lines = []
     for item in obj['etors']:
-        name = make_etor_name(namespace, tags, obj['name'], item['name'], py, meta)
+        name = make_etor_name(namespace, tags, obj['name'], item['name'], meta)
 
         if 'value' in item:
-            delim = "," if not py else ""
+            delim = ","
             value = _get_value_name(namespace, tags, item['value'])
             prologue = "%s = %s%s"%(name, value, delim)
-        elif py:
-            prologue = "%s = auto()"%(name)
         else:
             prologue = "%s,"%(name)
 
-        comment_style = "##" if py else "///<"
         for line in split_line(subt(namespace, tags, item['desc'], True), 70):
-            lines.append("%s%s %s"%(append_ws(prologue, 48), comment_style, line))
+            lines.append("%s%s %s"%(append_ws(prologue, 48), "///<", line))
             prologue = ""
 
-    if not py:
-        lines += [
-            "/// @cond",
-            "%sFORCE_UINT32 = 0x7fffffff"%make_enum_name(namespace, tags, obj)[:-1].upper(),
-            "/// @endcond",
-        ]
+    lines += [
+        "/// @cond",
+        "%sFORCE_UINT32 = 0x7fffffff"%make_enum_name(namespace, tags, obj)[:-1].upper(),
+        "/// @endcond",
+    ]
 
     return lines
 
@@ -757,43 +780,6 @@ def _get_type_name(namespace, tags, obj, item):
     if type_traits.is_array(type):
         type = type_traits.get_array_element_type(type)
     name = subt(namespace, tags, type,)
-    return name
-
-"""
-Private:
-    returns python c_type name of any type
-"""
-def get_ctype_name(namespace, tags, item):
-    name = subt(namespace, tags, item['type'])
-    name = _remove_const(name)
-    name = re.sub(r"void\*", "c_void_p", name)
-    name = re.sub(r"char\*", "c_char_p", name)
-    name = re.sub(r"bool", "c_bool", name)
-    name = re.sub(r"uint8_t", "c_ubyte", name)
-    name = re.sub(r"uint16_t", "c_ushort", name)
-    name = re.sub(r"uint32_t", "c_ulong", name)
-    name = re.sub(r"uint64_t", "c_ulonglong", name)
-    name = re.sub(r"int8_t", "c_byte", name)
-    name = re.sub(r"int16_t", "c_short", name)
-    name = re.sub(r"int32_t", "c_long", name)
-    name = re.sub(r"int64_t", "c_longlong", name)
-    name = re.sub(r"size_t", "c_size_t", name)
-    name = re.sub(r"float", "c_float", name)
-    name = re.sub(r"double", "c_double", name)
-    name = re.sub(r"\bchar", "c_char", name)
-    name = re.sub(r"\bint", "c_int", name)
-    # Handle void
-    if re.match(r"void", name):
-        if not re.match(r"_void_", name): # its not c_void_p
-            name = re.sub(r"void", "None", name)
-
-    while type_traits.is_pointer(name):
-        name = "POINTER(%s)"%_remove_ptr(name)
-
-    if 'name' in item and type_traits.is_array(item['type']):
-        length = subt(namespace, tags, type_traits.get_array_length(item['type'])) 
-        name = "%s * %s"%(type_traits.get_array_element_type(name), length)
-
     return name
 
 """
@@ -812,32 +798,21 @@ def make_member_name(namespace, tags, item, prefix="", remove_array=False):
 Public:
     returns a list of strings for each member of a structure or class
     c++ format: "TYPE NAME = INIT, ///< DESCRIPTION"
-    python format: "("NAME", TYPE)" ## DESCRIPTION"
 """
-def make_member_lines(namespace, tags, obj, prefix="", py=False, meta=None):
+def make_member_lines(namespace, tags, obj, prefix="", meta=None):
     lines = []
     if 'members' not in obj:
         return lines
 
     for i, item in enumerate(obj['members']):
-        name = make_member_name(namespace, tags, item, prefix, remove_array=py)
+        name = make_member_name(namespace, tags, item, prefix)
+        tname = _get_type_name(namespace, tags, obj, item)
 
-        if py:
-            tname = get_ctype_name(namespace, tags, item)
-        else:
-            tname = _get_type_name(namespace, tags, obj, item)
+        array_suffix = f"[{type_traits.get_array_length(item['type'])}]" if type_traits.is_array(item['type']) else ""
+        prologue = "%s %s %s;"%(tname, name, array_suffix)
 
-        if py:
-            delim = "," if i < (len(obj['members'])-1) else ""
-            prologue = "(\"%s\", %s)%s"%(name, tname, delim)
-        else:
-            array_suffix = f"[{type_traits.get_array_length(item['type'])}]" if type_traits.is_array(item['type']) else ""
-            prologue = "%s %s %s;"%(tname, name, array_suffix)
-
-        comment_style = "##" if py else "///<"
-        ws_count = 64 if py else 48
         for line in split_line(subt(namespace, tags, item['desc'], True), 70):
-            lines.append("%s%s %s"%(append_ws(prologue, ws_count), comment_style, line))
+            lines.append("%s%s %s"%(append_ws(prologue, 48), "///<", line))
             prologue = ""
     return lines
 
@@ -854,7 +829,7 @@ Public:
     returns a list of c++ strings for each parameter of a function
     format: "TYPE NAME = INIT, ///< DESCRIPTION"
 """
-def make_param_lines(namespace, tags, obj, py=False, decl=False, meta=None, format=["type", "name", "delim", "desc"], delim=",", replacements={}):
+def make_param_lines(namespace, tags, obj, decl=False, meta=None, format=["type", "name", "delim", "desc"], delim=",", replacements={}):
     lines = []
 
     params = obj['params']
@@ -866,19 +841,8 @@ def make_param_lines(namespace, tags, obj, py=False, decl=False, meta=None, form
         name = _get_param_name(namespace, tags, item)
         if replacements.get(name):
             name = replacements[name]
-        if py:
-            tname = get_ctype_name(namespace, tags, item)
-            # Handle fptr_typedef
-            # On Python side, passing a function pointer to a CFUNCTYPE is a bit awkward
-            # So solve this, if we encounter a function pointer type, we relpace it with
-            # c_void_p - a generic void pointer
-            if len(fptr_types) > 0:
-                for fptr_type in fptr_types:
-                    if tname == subt(namespace, tags, fptr_type):
-                        tname = 'c_void_p'  # Substitute function pointers to c_void_p
-                        break
-        else:
-            tname = _get_type_name(namespace, tags, obj, item)
+
+        tname = _get_type_name(namespace, tags, obj, item)
 
         words = []
         if "type*" in format:
@@ -902,7 +866,7 @@ def make_param_lines(namespace, tags, obj, py=False, decl=False, meta=None, form
         else:
             lines.append(prologue)
 
-    if "type" in format and len(lines) == 0 and not py:
+    if "type" in format and len(lines) == 0:
         lines = ["void"]
     return lines
 
@@ -989,6 +953,17 @@ def make_func_name(namespace, tags, obj):
 
 """
 Public:
+    returns the name of a function from a given name with prefix
+"""
+def make_func_name_with_prefix(prefix, name):
+    func_name = re.sub(r'^[^_]+_', '', name)
+    func_name = re.sub('_t$', '', func_name).capitalize()
+    func_name = re.sub(r'_([a-z])', lambda match: match.group(1).upper(), func_name)
+    func_name = f'{prefix}{func_name}'
+    return func_name
+
+"""
+Public:
     returns the etor of a function
 """
 def make_func_etor(namespace, tags, obj):
@@ -1041,7 +1016,35 @@ def make_pfncb_param_type(namespace, tags, obj):
 
 """
 Public:
-    returns a dict of auto-generated c++ parameter validation checks
+    returns an appropriate bounds helper function call for an entry point
+    parameter with the [bounds] tag
+"""
+def get_bounds_check(param, bounds_error):
+    # Images need their own helper, since function signature wise they would be
+    # identical to buffer rect
+    bounds_function = 'boundsImage' if 'image' in param['name'].lower() else 'bounds'
+    bounds_check = "auto {0} = {1}({2}, {3}, {4})".format(
+        bounds_error,
+        bounds_function,
+        param["name"],
+        param_traits.bounds_offset(param),
+        param_traits.bounds_size(param),
+    )
+    bounds_check += '; {0} != UR_RESULT_SUCCESS'.format(bounds_error)
+
+    # USM bounds checks need the queue handle parameter to be able to use the
+    # GetMemAllocInfo entry point
+    if type_traits.is_pointer(param['type']):
+        # If no `hQueue` parameter exists that should have been caught at spec
+        # generation.
+        return re.sub(r'bounds\(', 'bounds(hQueue, ', bounds_check)
+
+    return bounds_check
+
+"""
+Public:
+    returns a dict of auto-generated c++ parameter validation checks for the
+    given function (specified by `obj`)
 """
 def make_param_checks(namespace, tags, obj, cpp=False, meta=None):
     checks = {}
@@ -1054,6 +1057,13 @@ def make_param_checks(namespace, tags, obj, cpp=False, meta=None):
                     if key not in checks:
                         checks[key] = []
                     checks[key].append(subt(namespace, tags, code.group(1), False, cpp))
+
+    for p in obj.get('params', []):
+        if param_traits.is_bounds(p):
+            if 'boundsError' not in checks:
+                checks['boundsError'] = []
+            checks['boundsError'].append(get_bounds_check(p, 'boundsError'))
+
     return checks
 
 """
@@ -1258,22 +1268,41 @@ def get_loader_prologue(namespace, tags, obj, meta):
 
 """
 Public:
+    returns an enum object with the given name
+"""
+def get_enum_by_name(specs, namespace, tags, name, only_typed):
+    for s in specs:
+        for obj in s['objects']:
+            if obj_traits.is_enum(obj) and make_enum_name(namespace, tags, obj) == name:
+                typed = obj.get('typed_etors', False) is True
+                if only_typed:
+                    if typed:
+                        return obj
+                    else:
+                        return None
+                else:
+                    return obj
+    return None
+
+"""
+Public:
     returns a list of dict for converting loader output parameters
 """
-def get_loader_epilogue(namespace, tags, obj, meta):
+def get_loader_epilogue(specs, namespace, tags, obj, meta):
     epilogue = []
 
     for i, item in enumerate(obj['params']):
         if param_traits.is_mbz(item):
             continue
+
+        name = subt(namespace, tags, item['name'])
+        tname = _remove_const_ptr(subt(namespace, tags, item['type']))
+
+        obj_name = re.sub(r"(\w+)_handle_t", r"\1_object_t", tname)
+        fty_name = re.sub(r"(\w+)_handle_t", r"\1_factory", tname)
+
         if param_traits.is_release(item) or param_traits.is_output(item) or param_traits.is_inoutput(item):
             if type_traits.is_class_handle(item['type'], meta):
-                name = subt(namespace, tags, item['name'])
-                tname = _remove_const_ptr(subt(namespace, tags, item['type']))
-
-                obj_name = re.sub(r"(\w+)_handle_t", r"\1_object_t", tname)
-                fty_name = re.sub(r"(\w+)_handle_t", r"\1_factory", tname)
-
                 if param_traits.is_range(item):
                     range_start = param_traits.range_start(item)
                     range_end   = param_traits.range_end(item)
@@ -1294,6 +1323,44 @@ def get_loader_epilogue(namespace, tags, obj, meta):
                         'release': param_traits.is_release(item),
                         'optional': param_traits.is_optional(item)
                     })
+            elif param_traits.is_typename(item):
+                typename = param_traits.typename(item)
+                underlying_type = None
+                for inner in obj['params']:
+                    iname = _get_param_name(namespace, tags, inner)
+                    if iname == typename:
+                        underlying_type = _get_type_name(namespace, tags, obj, inner)
+                if underlying_type is None:
+                    continue
+
+                prop_size = param_traits.typename_size(item)
+                enum = get_enum_by_name(specs, namespace, tags, underlying_type, True)
+                handle_etors = []
+                for etor in enum['etors']:
+                    associated_type = etor_get_associated_type(namespace, tags, etor)
+                    if 'handle' in associated_type:
+                        is_array = False
+                        if value_traits.is_array(associated_type):
+                            associated_type = value_traits.get_array_name(associated_type)
+                            is_array = True
+
+                        etor_name = make_etor_name(namespace, tags, enum['name'], etor['name'])
+                        obj_name = re.sub(r"(\w+)_handle_t", r"\1_object_t", associated_type)
+                        fty_name = re.sub(r"(\w+)_handle_t", r"\1_factory", associated_type)
+                        handle_etors.append({'name': etor_name,
+                                             'type': associated_type,
+                                             'obj': obj_name,
+                                             'factory': fty_name,
+                                             'is_array': is_array})
+
+                if handle_etors:
+                    epilogue.append({
+                                     'name': name,
+                                     'obj': obj_name,
+                                     'release': False,
+                                     'typename': typename,
+                                     'size': prop_size,
+                                     'etors': handle_etors})
 
     return epilogue
 

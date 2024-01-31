@@ -10,8 +10,10 @@
 
 #include "device.hpp"
 #include "ur_level_zero.hpp"
+#include "ur_util.hpp"
 #include <algorithm>
 #include <climits>
+#include <optional>
 
 UR_APIEXPORT ur_result_t UR_APICALL urDeviceGet(
     ur_platform_handle_t Platform, ///< [in] handle of the platform instance
@@ -86,6 +88,24 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGet(
   }
 
   return UR_RESULT_SUCCESS;
+}
+
+uint64_t calculateGlobalMemSize(ur_device_handle_t Device) {
+  // Cache GlobalMemSize
+  Device->ZeGlobalMemSize.Compute =
+      [Device](struct ze_global_memsize &GlobalMemSize) {
+        for (const auto &ZeDeviceMemoryExtProperty :
+             Device->ZeDeviceMemoryProperties->second) {
+          GlobalMemSize.value += ZeDeviceMemoryExtProperty.physicalSize;
+        }
+        if (GlobalMemSize.value == 0) {
+          for (const auto &ZeDeviceMemoryProperty :
+               Device->ZeDeviceMemoryProperties->first) {
+            GlobalMemSize.value += ZeDeviceMemoryProperty.totalSize;
+          }
+        }
+      };
+  return Device->ZeGlobalMemSize.operator->()->value;
 }
 
 UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(
@@ -249,22 +269,19 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(
     return ReturnValue(uint32_t{64});
   }
   case UR_DEVICE_INFO_MAX_MEM_ALLOC_SIZE:
-    return ReturnValue(uint64_t{Device->ZeDeviceProperties->maxMemAllocSize});
+    // if the user wishes to allocate large allocations on a system that usually
+    // does not allow that allocation size, then we return the max global mem
+    // size as the limit.
+    if (Device->useRelaxedAllocationLimits()) {
+      return ReturnValue(uint64_t{calculateGlobalMemSize(Device)});
+    } else {
+      return ReturnValue(uint64_t{Device->ZeDeviceProperties->maxMemAllocSize});
+    }
   case UR_DEVICE_INFO_GLOBAL_MEM_SIZE: {
-    uint64_t GlobalMemSize = 0;
     // Support to read physicalSize depends on kernel,
     // so fallback into reading totalSize if physicalSize
     // is not available.
-    for (const auto &ZeDeviceMemoryExtProperty :
-         Device->ZeDeviceMemoryProperties->second) {
-      GlobalMemSize += ZeDeviceMemoryExtProperty.physicalSize;
-    }
-    if (GlobalMemSize == 0) {
-      for (const auto &ZeDeviceMemoryProperty :
-           Device->ZeDeviceMemoryProperties->first) {
-        GlobalMemSize += ZeDeviceMemoryProperty.totalSize;
-      }
-    }
+    uint64_t GlobalMemSize = calculateGlobalMemSize(Device);
     return ReturnValue(uint64_t{GlobalMemSize});
   }
   case UR_DEVICE_INFO_LOCAL_MEM_SIZE:
@@ -339,8 +356,10 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(
         UR_DEVICE_AFFINITY_DOMAIN_FLAG_NEXT_PARTITIONABLE));
   case UR_DEVICE_INFO_PARTITION_TYPE: {
     // For root-device there is no partitioning to report.
-    if (pSize && !Device->isSubDevice()) {
-      *pSize = 0;
+    if (Device->SubDeviceCreationProperty == std::nullopt ||
+        !Device->isSubDevice()) {
+      if (pSize)
+        *pSize = 0;
       return UR_RESULT_SUCCESS;
     }
 
@@ -351,7 +370,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(
       return ReturnValue(cslice);
     }
 
-    return ReturnValue(Device->SubDeviceCreationProperty);
+    return ReturnValue(*Device->SubDeviceCreationProperty);
   }
   // Everything under here is not supported yet
   case UR_EXT_DEVICE_INFO_OPENCL_C_VERSION:
@@ -637,6 +656,9 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(
                       static_cast<int32_t>(ZE_RESULT_ERROR_UNINITIALIZED));
       return UR_RESULT_ERROR_ADAPTER_SPECIFIC;
     }
+    // Calculate the global memory size as the max limit that can be reported as
+    // "free" memory for the user to allocate.
+    uint64_t GlobalMemSize = calculateGlobalMemSize(Device);
     // Only report device memory which zeMemAllocDevice can allocate from.
     // Currently this is only the one enumerated with ordinal 0.
     uint64_t FreeMemory = 0;
@@ -661,7 +683,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(
         }
       }
     }
-    return ReturnValue(FreeMemory);
+    return ReturnValue(std::min(GlobalMemSize, FreeMemory));
   }
   case UR_DEVICE_INFO_MEMORY_CLOCK_RATE: {
     // If there are not any memory modules then return 0.
@@ -792,6 +814,9 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(
     return ReturnValue(static_cast<uint32_t>(
         0)); //__read_write attribute currently undefinde in opencl
   }
+  case UR_DEVICE_INFO_VIRTUAL_MEMORY_SUPPORT: {
+    return ReturnValue(static_cast<uint32_t>(true));
+  }
 
   case UR_DEVICE_INFO_ESIMD_SUPPORT: {
     // ESIMD is only supported by Intel GPUs.
@@ -898,6 +923,16 @@ ur_device_handle_t_::useImmediateCommandLists() {
   default:
     return NotUsed;
   }
+}
+
+bool ur_device_handle_t_::useRelaxedAllocationLimits() {
+  static const bool EnableRelaxedAllocationLimits = [] {
+    auto UrRet = ur_getenv("UR_L0_ENABLE_RELAXED_ALLOCATION_LIMITS");
+    const bool RetVal = UrRet ? std::stoi(*UrRet) : 0;
+    return RetVal;
+  }();
+
+  return EnableRelaxedAllocationLimits;
 }
 
 ur_result_t ur_device_handle_t_::initialize(int SubSubDeviceOrdinal,
@@ -1185,16 +1220,14 @@ UR_APIEXPORT ur_result_t UR_APICALL urDevicePartition(
     UR_ASSERT(NumDevices == EffectiveNumDevices, UR_RESULT_ERROR_INVALID_VALUE);
 
   for (uint32_t I = 0; I < NumDevices; I++) {
-    Device->SubDevices[I]->SubDeviceCreationProperty =
-        Properties->pProperties[0];
-    if (Properties->pProperties[0].type ==
-        UR_DEVICE_PARTITION_BY_AFFINITY_DOMAIN) {
+    auto prop = Properties->pProperties[0];
+    if (prop.type == UR_DEVICE_PARTITION_BY_AFFINITY_DOMAIN) {
       // In case the value is NEXT_PARTITIONABLE, we need to change it to the
       // chosen domain. This will always be NUMA since that's the only domain
       // supported by level zero.
-      Device->SubDevices[I]->SubDeviceCreationProperty.value.affinity_domain =
-          UR_DEVICE_AFFINITY_DOMAIN_FLAG_NUMA;
+      prop.value.affinity_domain = UR_DEVICE_AFFINITY_DOMAIN_FLAG_NUMA;
     }
+    Device->SubDevices[I]->SubDeviceCreationProperty = prop;
 
     OutDevices[I] = Device->SubDevices[I];
     // reusing the same pi_device needs to increment the reference count

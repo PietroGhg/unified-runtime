@@ -27,6 +27,8 @@ add_ur_adapter(${TARGET_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/memory.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/memory.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/physical_mem.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/physical_mem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/platform.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/platform.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/program.hpp
@@ -38,6 +40,7 @@ add_ur_adapter(${TARGET_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/tracing.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/usm.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/usm_p2p.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/virtual_mem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../ur/ur.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../ur/ur.hpp
 )
@@ -71,6 +74,10 @@ if(UMF_ENABLE_POOL_TRACKING)
   target_compile_definitions("ur_adapter_cuda" PRIVATE UMF_ENABLE_POOL_TRACKING)
 else()
   message(WARNING "CUDA adapter USM pools are disabled, set UMF_ENABLE_POOL_TRACKING to enable them")
+endif()
+
+if (CUDA_cupti_LIBRARY)
+  target_compile_definitions("ur_adapter_cuda" PRIVATE CUPTI_LIB_PATH="${CUDA_cupti_LIBRARY}")
 endif()
 
 target_link_libraries(${TARGET_NAME} PRIVATE

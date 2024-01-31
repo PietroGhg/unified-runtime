@@ -38,8 +38,8 @@ hipStream_t ur_queue_handle_t_::getNextComputeStream(uint32_t *StreamToken) {
       // The second check is done after mutex is locked so other threads can not
       // change NumComputeStreams after that
       if (NumComputeStreams < ComputeStreams.size()) {
-        UR_CHECK_ERROR(hipStreamCreateWithFlags(
-            &ComputeStreams[NumComputeStreams++], Flags));
+        UR_CHECK_ERROR(hipStreamCreateWithPriority(
+            &ComputeStreams[NumComputeStreams++], Flags, Priority));
       }
     }
     Token = ComputeStreamIdx++;
@@ -97,8 +97,8 @@ hipStream_t ur_queue_handle_t_::getNextTransferStream() {
     // The second check is done after mutex is locked so other threads can not
     // change NumTransferStreams after that
     if (NumTransferStreams < TransferStreams.size()) {
-      UR_CHECK_ERROR(hipStreamCreateWithFlags(
-          &TransferStreams[NumTransferStreams++], Flags));
+      UR_CHECK_ERROR(hipStreamCreateWithPriority(
+          &TransferStreams[NumTransferStreams++], Flags, Priority));
     }
   }
   uint32_t Stream_i = TransferStreamIdx++ % TransferStreams.size();
@@ -110,15 +110,27 @@ hipStream_t ur_queue_handle_t_::getNextTransferStream() {
 UR_APIEXPORT ur_result_t UR_APICALL
 urQueueCreate(ur_context_handle_t hContext, ur_device_handle_t hDevice,
               const ur_queue_properties_t *pProps, ur_queue_handle_t *phQueue) {
+  UR_ASSERT(std::find(hContext->getDevices().begin(),
+                      hContext->getDevices().end(),
+                      hDevice) != hContext->getDevices().end(),
+            UR_RESULT_ERROR_INVALID_CONTEXT);
   try {
     std::unique_ptr<ur_queue_handle_t_> QueueImpl{nullptr};
 
-    if (hContext->getDevice() != hDevice) {
-      *phQueue = nullptr;
-      return UR_RESULT_ERROR_INVALID_DEVICE;
-    }
-
     unsigned int Flags = 0;
+    ur_queue_flags_t URFlags = 0;
+    int Priority = 0; // Not guaranteed, but, in ROCm 5.0-6.0, 0 is the default
+
+    if (pProps && pProps->stype == UR_STRUCTURE_TYPE_QUEUE_PROPERTIES) {
+      URFlags = pProps->flags;
+      if (URFlags & UR_QUEUE_FLAG_PRIORITY_HIGH) {
+        ScopedContext Active(hDevice);
+        UR_CHECK_ERROR(hipDeviceGetStreamPriorityRange(nullptr, &Priority));
+      } else if (URFlags & UR_QUEUE_FLAG_PRIORITY_LOW) {
+        ScopedContext Active(hDevice);
+        UR_CHECK_ERROR(hipDeviceGetStreamPriorityRange(&Priority, nullptr));
+      }
+    }
 
     const bool IsOutOfOrder =
         pProps ? pProps->flags & UR_QUEUE_FLAG_OUT_OF_ORDER_EXEC_MODE_ENABLE
@@ -131,7 +143,7 @@ urQueueCreate(ur_context_handle_t hContext, ur_device_handle_t hDevice,
 
     QueueImpl = std::unique_ptr<ur_queue_handle_t_>(new ur_queue_handle_t_{
         std::move(ComputeHipStreams), std::move(TransferHipStreams), hContext,
-        hDevice, Flags, pProps ? pProps->flags : 0});
+        hDevice, Flags, pProps ? pProps->flags : 0, Priority});
 
     *phQueue = QueueImpl.release();
 
@@ -198,7 +210,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urQueueRelease(ur_queue_handle_t hQueue) {
     if (!hQueue->backendHasOwnership())
       return UR_RESULT_SUCCESS;
 
-    ScopedContext Active(hQueue->getContext()->getDevice());
+    ScopedContext Active(hQueue->getDevice());
 
     hQueue->forEachStream([](hipStream_t S) {
       UR_CHECK_ERROR(hipStreamSynchronize(S));
@@ -219,7 +231,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urQueueFinish(ur_queue_handle_t hQueue) {
 
   try {
 
-    ScopedContext Active(hQueue->getContext()->getDevice());
+    ScopedContext Active(hQueue->getDevice());
 
     hQueue->syncStreams<true>([&Result](hipStream_t S) {
       UR_CHECK_ERROR(hipStreamSynchronize(S));
@@ -251,7 +263,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urQueueFlush(ur_queue_handle_t) {
 UR_APIEXPORT ur_result_t UR_APICALL
 urQueueGetNativeHandle(ur_queue_handle_t hQueue, ur_queue_native_desc_t *,
                        ur_native_handle_t *phNativeQueue) {
-  ScopedContext Active(hQueue->getContext()->getDevice());
+  ScopedContext Active(hQueue->getDevice());
   *phNativeQueue =
       reinterpret_cast<ur_native_handle_t>(hQueue->getNextComputeStream());
   return UR_RESULT_SUCCESS;
@@ -291,9 +303,10 @@ UR_APIEXPORT ur_result_t UR_APICALL urQueueCreateWithNativeHandle(
       new ur_queue_handle_t_{std::move(ComputeHIPStreams),
                              std::move(TransferHIPStreams),
                              hContext,
-                             hContext->getDevice(),
+                             hDevice,
                              HIPFlags,
                              Flags,
+                             /*priority*/ 0,
                              /*backend_owns*/ pProperties->isNativeHandleOwned};
   (*phQueue)->NumComputeStreams = 1;
 

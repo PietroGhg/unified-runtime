@@ -85,7 +85,6 @@ urUSMGetMemAllocInfo(ur_context_handle_t hContext, const void *pMem,
   std::ignore = propSize;
   std::ignore = pPropValue;
   std::ignore = pPropSizeRet;
-  ur_result_t Result = UR_RESULT_SUCCESS;
 
   UrReturnHelper ReturnValue(propSize, pPropValue, pPropSizeRet);
 
