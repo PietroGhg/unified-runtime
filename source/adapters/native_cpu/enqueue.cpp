@@ -105,12 +105,6 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
                             ndr.GlobalSize[2], itemsPerThread, ndr.LocalSize[1],
                             ndr.LocalSize[2], ndr.GlobalOffset[0],
                             ndr.GlobalOffset[1], ndr.GlobalOffset[2]);
-    if(false) {
-      std::cout << "global_size_0 " << ndr.GlobalSize[0] << "\n";
-      std::cout << "itemsPerThread "  << itemsPerThread << "\n";
-      std::cout << "new_num_work_groups_0 " << new_num_work_groups_0 << "\n";
-      std::cout << "peel start: " << new_num_work_groups_0*itemsPerThread << "\n";
-    }
   
     for (unsigned g2 = 0; g2 < numWG2; g2++) {
       for (unsigned g1 = 0; g1 < numWG1; g1++) {
@@ -130,7 +124,10 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
     }
 
   } else {
+    // We are running a parallel_for over an nd_range
+    
     if (numWG1 * numWG2 >= numParallelThreads) {
+      // Dimensions 1 and 2 have enough work, split them across the threadpool
       for (unsigned g2 = 0; g2 < numWG2; g2++) {
         for (unsigned g1 = 0; g1 < numWG1; g1++) {
             futures.emplace_back(tp.schedule_task(
@@ -145,6 +142,8 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
         }
       }
     } else {
+      // Split dimension 0 across the threadpool
+      // Here we try to create groups of workgroups in order to reduce synchronization overhead
       for (unsigned g2 = 0; g2 < numWG2; g2++) {
         for (unsigned g1 = 0; g1 < numWG1; g1++) {
           for (unsigned g0 = 0; g0 < numWG0; g0++) {
