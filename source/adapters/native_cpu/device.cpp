@@ -164,8 +164,8 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(ur_device_handle_t hDevice,
   case UR_DEVICE_INFO_PREFERRED_VECTOR_WIDTH_FLOAT:
   case UR_DEVICE_INFO_PREFERRED_VECTOR_WIDTH_DOUBLE:
   case UR_DEVICE_INFO_PREFERRED_VECTOR_WIDTH_HALF:
-  // todo: how can we query vector width in a platform
-  // indipendent way?
+  // TODO: How can we query vector width in a platform
+  // independent way?
   case UR_DEVICE_INFO_NATIVE_VECTOR_WIDTH_CHAR:
     return ReturnValue(uint32_t{32});
   case UR_DEVICE_INFO_NATIVE_VECTOR_WIDTH_SHORT:
