@@ -48,6 +48,14 @@ struct NDRDescT {
 };
 } // namespace native_cpu
 
+static native_cpu::state getResizedState(const native_cpu::NDRDescT& ndr,
+   size_t itemsPerThread) {
+    native_cpu::state resized_state(ndr.GlobalSize[0], ndr.GlobalSize[1],
+                            ndr.GlobalSize[2], itemsPerThread, ndr.LocalSize[1],
+                            ndr.LocalSize[2], ndr.GlobalOffset[0],
+                            ndr.GlobalOffset[1], ndr.GlobalOffset[2]);
+    return resized_state;
+}
 
 UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
     ur_queue_handle_t hQueue, ur_kernel_handle_t hKernel, uint32_t workDim,
@@ -87,7 +95,8 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
                           ndr.GlobalOffset[1], ndr.GlobalOffset[2]);
   if (isLocalSizeOne && ndr.GlobalSize[0] > numParallelThreads) {
     // If the local size is one, we make the assumption that we are running a
-    // parallel_for over a sycl::range Todo: we could add compiler checks and
+    // parallel_for over a sycl::range.
+    // Todo: we could add compiler checks and
     // kernel properties for this (e.g. check that no barriers are called, no
     // local memory args).
 
@@ -101,21 +110,19 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
 
     size_t new_num_work_groups_0 = numParallelThreads;
     size_t itemsPerThread = ndr.GlobalSize[0] / numParallelThreads;
-    native_cpu::state fake_state(new_num_work_groups_0, ndr.GlobalSize[1],
-                            ndr.GlobalSize[2], itemsPerThread, ndr.LocalSize[1],
-                            ndr.LocalSize[2], ndr.GlobalOffset[0],
-                            ndr.GlobalOffset[1], ndr.GlobalOffset[2]);
   
     for (unsigned g2 = 0; g2 < numWG2; g2++) {
       for (unsigned g1 = 0; g1 < numWG1; g1++) {
         for ( unsigned g0 = 0; g0 < new_num_work_groups_0; g0 += 1) {
           futures.emplace_back(tp.schedule_task(
-              [fake_state, hKernel, g0, g1, g2](size_t) mutable {
-                  fake_state.update(g0, g1, g2);
-                  hKernel->_subhandler(hKernel->_args.data(), &fake_state);
+              [&ndr = std::as_const(ndr), itemsPerThread, hKernel, g0, g1, g2](size_t) mutable {
+                  native_cpu::state resized_state = getResizedState(ndr, itemsPerThread);
+                  resized_state.update(g0, g1, g2);
+                  hKernel->_subhandler(hKernel->_args.data(), &resized_state);
               }));
         }
-        // peel
+        // Peel the remaining work items. Since the local size is 1, we iterate
+        // over the work groups.
         for (unsigned g0 = new_num_work_groups_0*itemsPerThread; g0 < numWG0; g0++) {
           state.update(g0, g1, g2);
           hKernel->_subhandler(hKernel->_args.data(), &state);
