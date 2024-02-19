@@ -132,7 +132,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
       for (unsigned g1 = 0; g1 < numWG1; g1++) {
         for ( unsigned g0 = 0; g0 < new_num_work_groups_0; g0 += 1) {
           futures.emplace_back(tp.schedule_task(
-              [&ndr = std::as_const(ndr), itemsPerThread, hKernel, g0, g1, g2](size_t) mutable {
+              [&ndr = std::as_const(ndr), itemsPerThread, hKernel, g0, g1, g2](size_t) {
                   native_cpu::state resized_state = getResizedState(ndr, itemsPerThread);
                   resized_state.update(g0, g1, g2);
                   hKernel->_subhandler(hKernel->_args.data(), &resized_state);
