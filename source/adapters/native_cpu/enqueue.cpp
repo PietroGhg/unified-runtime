@@ -48,6 +48,8 @@ struct NDRDescT {
 };
 } // namespace native_cpu
 
+
+#ifdef NATIVECPU_USE_OCK
 static native_cpu::state getResizedState(const native_cpu::NDRDescT& ndr,
    size_t itemsPerThread) {
     native_cpu::state resized_state(ndr.GlobalSize[0], ndr.GlobalSize[1],
@@ -56,6 +58,7 @@ static native_cpu::state getResizedState(const native_cpu::NDRDescT& ndr,
                             ndr.GlobalOffset[1], ndr.GlobalOffset[2]);
     return resized_state;
 }
+#endif
 
 UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
     ur_queue_handle_t hQueue, ur_kernel_handle_t hKernel, uint32_t workDim,
@@ -87,8 +90,6 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
   auto numWG0 = ndr.GlobalSize[0] / ndr.LocalSize[0];
   auto numWG1 = ndr.GlobalSize[1] / ndr.LocalSize[1];
   auto numWG2 = ndr.GlobalSize[2] / ndr.LocalSize[2];
-  bool isLocalSizeOne =
-      ndr.LocalSize[0] == 1 && ndr.LocalSize[1] == 1 && ndr.LocalSize[2] == 1;
   native_cpu::state state(ndr.GlobalSize[0], ndr.GlobalSize[1],
                           ndr.GlobalSize[2], ndr.LocalSize[0], ndr.LocalSize[1],
                           ndr.LocalSize[2], ndr.GlobalOffset[0],
@@ -110,6 +111,8 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
     }
   }
 #else
+  bool isLocalSizeOne =
+      ndr.LocalSize[0] == 1 && ndr.LocalSize[1] == 1 && ndr.LocalSize[2] == 1;
   if (isLocalSizeOne && ndr.GlobalSize[0] > numParallelThreads) {
     // If the local size is one, we make the assumption that we are running a
     // parallel_for over a sycl::range.
@@ -120,7 +123,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
     // Todo: this assumes that dim 0 is the best dimension over which we want to
     // parallelize
 
-    // Sice we also vectorize the kernel, and vectorization happens within the 
+    // Since we also vectorize the kernel, and vectorization happens within the 
     // work group loop, it's better to have a large-ish local size. We can 
     // divide the global range by the number of threads, set that as the local size 
     // and peel everything else.
