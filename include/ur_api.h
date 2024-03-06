@@ -220,6 +220,7 @@ typedef enum ur_function_t {
     UR_FUNCTION_COMMAND_BUFFER_RELEASE_COMMAND_EXP = 217,                      ///< Enumerator for ::urCommandBufferReleaseCommandExp
     UR_FUNCTION_COMMAND_BUFFER_GET_INFO_EXP = 218,                             ///< Enumerator for ::urCommandBufferGetInfoExp
     UR_FUNCTION_COMMAND_BUFFER_COMMAND_GET_INFO_EXP = 219,                     ///< Enumerator for ::urCommandBufferCommandGetInfoExp
+    UR_FUNCTION_DEVICE_GET_SELECTED = 220,                                     ///< Enumerator for ::urDeviceGetSelected
     /// @cond
     UR_FUNCTION_FORCE_UINT32 = 0x7fffffff
     /// @endcond
@@ -1385,6 +1386,46 @@ urDeviceGet(
                                     ///< platform shall only retrieve that number of devices.
     uint32_t *pNumDevices           ///< [out][optional] pointer to the number of devices.
                                     ///< pNumDevices will be updated with the total number of devices available.
+);
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Retrieves devices within a platform selected by ONEAPI_DEVICE_SELECTOR
+///
+/// @details
+///     - Multiple calls to this function will return identical device handles,
+///       in the same order.
+///     - The number and order of handles returned from this function will be
+///       affected by environment variables that filter or select which devices
+///       are exposed through this API.
+///     - A reference is taken for each returned device and must be released
+///       with a subsequent call to ::urDeviceRelease.
+///     - The application may call this function from simultaneous threads, the
+///       implementation must be thread-safe.
+///
+/// @returns
+///     - ::UR_RESULT_SUCCESS
+///     - ::UR_RESULT_ERROR_UNINITIALIZED
+///     - ::UR_RESULT_ERROR_DEVICE_LOST
+///     - ::UR_RESULT_ERROR_ADAPTER_SPECIFIC
+///     - ::UR_RESULT_ERROR_INVALID_NULL_HANDLE
+///         + `NULL == hPlatform`
+///     - ::UR_RESULT_ERROR_INVALID_ENUMERATION
+///         + `::UR_DEVICE_TYPE_VPU < DeviceType`
+///     - ::UR_RESULT_ERROR_INVALID_VALUE
+UR_APIEXPORT ur_result_t UR_APICALL
+urDeviceGetSelected(
+    ur_platform_handle_t hPlatform, ///< [in] handle of the platform instance
+    ur_device_type_t DeviceType,    ///< [in] the type of the devices.
+    uint32_t NumEntries,            ///< [in] the number of devices to be added to phDevices.
+                                    ///< If phDevices in not NULL then NumEntries should be greater than zero,
+                                    ///< otherwise ::UR_RESULT_ERROR_INVALID_VALUE,
+                                    ///< will be returned.
+    ur_device_handle_t *phDevices,  ///< [out][optional][range(0, NumEntries)] array of handle of devices.
+                                    ///< If NumEntries is less than the number of devices available, then only
+                                    ///< that number of devices will be retrieved.
+    uint32_t *pNumDevices           ///< [out][optional] pointer to the number of devices.
+                                    ///< pNumDevices will be updated with the total number of selected devices
+                                    ///< available for the given platform.
 );
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -4295,8 +4336,9 @@ typedef enum ur_program_info_t {
                                          ///< provided for identifying memory leaks.
     UR_PROGRAM_INFO_CONTEXT = 1,         ///< [::ur_context_handle_t] Program context info.
     UR_PROGRAM_INFO_NUM_DEVICES = 2,     ///< [uint32_t] Return number of devices associated with Program.
-    UR_PROGRAM_INFO_DEVICES = 3,         ///< [::ur_device_handle_t[]] Return list of devices associated with
-                                         ///< Program.
+    UR_PROGRAM_INFO_DEVICES = 3,         ///< [::ur_device_handle_t[]] Return list of devices associated with a program.
+                                         ///< This is either the list of devices associated with the context or a
+                                         ///< subset of those devices when the program is created using ::urProgramCreateWithBinary.
     UR_PROGRAM_INFO_SOURCE = 4,          ///< [char[]] Return program source associated with Program.
     UR_PROGRAM_INFO_BINARY_SIZES = 5,    ///< [size_t[]] Return program binary sizes for each device.
     UR_PROGRAM_INFO_BINARIES = 6,        ///< [unsigned char[]] Return program binaries for all devices for this
@@ -8692,8 +8734,12 @@ urEnqueueCooperativeKernelLaunchExp(
 ///     - ::UR_RESULT_ERROR_INVALID_KERNEL
 UR_APIEXPORT ur_result_t UR_APICALL
 urKernelSuggestMaxCooperativeGroupCountExp(
-    ur_kernel_handle_t hKernel, ///< [in] handle of the kernel object
-    uint32_t *pGroupCountRet    ///< [out] pointer to maximum number of groups
+    ur_kernel_handle_t hKernel,     ///< [in] handle of the kernel object
+    size_t localWorkSize,           ///< [in] number of local work-items that will form a work-group when the
+                                    ///< kernel is launched
+    size_t dynamicSharedMemorySize, ///< [in] size of dynamic shared memory, for each work-group, in bytes,
+                                    ///< that will be used when the kernel is launched
+    uint32_t *pGroupCountRet        ///< [out] pointer to maximum number of groups
 );
 
 #if !defined(__GNUC__)
@@ -9641,6 +9687,8 @@ typedef struct ur_kernel_set_specialization_constants_params_t {
 ///     allowing the callback the ability to modify the parameter's value
 typedef struct ur_kernel_suggest_max_cooperative_group_count_exp_params_t {
     ur_kernel_handle_t *phKernel;
+    size_t *plocalWorkSize;
+    size_t *pdynamicSharedMemorySize;
     uint32_t **ppGroupCountRet;
 } ur_kernel_suggest_max_cooperative_group_count_exp_params_t;
 
@@ -11147,6 +11195,18 @@ typedef struct ur_device_get_params_t {
     ur_device_handle_t **pphDevices;
     uint32_t **ppNumDevices;
 } ur_device_get_params_t;
+
+///////////////////////////////////////////////////////////////////////////////
+/// @brief Function parameters for urDeviceGetSelected
+/// @details Each entry is a pointer to the parameter passed to the function;
+///     allowing the callback the ability to modify the parameter's value
+typedef struct ur_device_get_selected_params_t {
+    ur_platform_handle_t *phPlatform;
+    ur_device_type_t *pDeviceType;
+    uint32_t *pNumEntries;
+    ur_device_handle_t **pphDevices;
+    uint32_t **ppNumDevices;
+} ur_device_get_selected_params_t;
 
 ///////////////////////////////////////////////////////////////////////////////
 /// @brief Function parameters for urDeviceGetInfo
