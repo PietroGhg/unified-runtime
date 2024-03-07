@@ -57,7 +57,7 @@ struct ur_kernel_handle_t_ : RefCounted {
   std::vector<native_cpu::NativeCPUArgDesc> _args;
   std::vector<local_arg_info_t> _localArgInfo;
 
-  // To be called before enqueing the kernel.
+  // To be called before enqueueing the kernel.
   void updateMemPool(size_t numParallelThreads) {
     // compute requested size.
     size_t reqSize = 0;

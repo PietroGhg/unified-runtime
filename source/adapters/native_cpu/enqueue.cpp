@@ -196,12 +196,14 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
       }
 
       // schedule the remaining tasks
-      futures.emplace_back(tp.schedule_task([&groups, remainder, scheduled = numParallelThreads*groupsPerThread, hKernel](size_t threadId) {
-            for(unsigned i = 0; i < remainder; i++) {
-              auto index = scheduled + i;
-              groups[index](threadId, *hKernel);
-            }
-            }));
+      if(remainder) {
+        futures.emplace_back(tp.schedule_task([&groups, remainder, scheduled = numParallelThreads*groupsPerThread, hKernel](size_t threadId) {
+              for(unsigned i = 0; i < remainder; i++) {
+                auto index = scheduled + i;
+                groups[index](threadId, *hKernel);
+              }
+              }));
+      }
 
     }
   }

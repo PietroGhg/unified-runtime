@@ -122,13 +122,18 @@ class worker_thread {
 
 
 // Implementation of a thread pool. The worker threads are created and
-//       ready at construction. This class mainly holds the interface for
-//       scheduling a task to the most appropriate thread and handling input
-//       parameters and futures.
+// ready at construction. This class mainly holds the interface for
+// scheduling a task to the most appropriate thread and handling input
+// parameters and futures.
 class simple_thread_pool {
  public:
   simple_thread_pool(size_t numThreads = 0) noexcept : m_isRunning(false) {
     this->resize(numThreads);
+    this->start();
+  }
+
+  ~simple_thread_pool() {
+    this->stop();
   }
 
   

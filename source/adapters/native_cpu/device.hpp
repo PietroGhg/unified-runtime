@@ -15,13 +15,8 @@
 
 struct ur_device_handle_t_ {
   native_cpu::threadpool_t tp;
-  ur_device_handle_t_(ur_platform_handle_t ArgPlt) : Platform(ArgPlt) {
-    tp.start();
-  }
+  ur_device_handle_t_(ur_platform_handle_t ArgPlt) : Platform(ArgPlt) {}
 
-  ~ur_device_handle_t_() {
-    tp.stop();
-  }
 
   ur_platform_handle_t Platform;
 };
