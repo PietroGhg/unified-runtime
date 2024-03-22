@@ -237,7 +237,7 @@ public:
   threadpool_interface(size_t numThreads) : threadpool(numThreads) {}
   threadpool_interface() : threadpool(0) {}
 
-  std::future<void> schedule_task(worker_task_t &&task) {
+  auto schedule_task(worker_task_t &&task) {
     auto workerTask = std::make_shared<std::packaged_task<void(size_t)>>(
         [task](auto&& PH1) { return task(std::forward<decltype(PH1)>(PH1)); });
     threadpool.schedule(
