@@ -40,8 +40,10 @@ struct ur_kernel_handle_t_ : RefCounted {
   ur_kernel_handle_t_(const char *name, nativecpu_task_t subhandler)
       : _name{name}, _subhandler{std::move(subhandler)} {}
 
-  ur_kernel_handle_t_(const ur_kernel_handle_t_& other) : _name(other._name), _subhandler(other._subhandler), 
-  _args(other._args), _localArgInfo(other._localArgInfo), _localMemPool(other._localMemPool), _localMemPoolSize(other._localMemPoolSize) {
+  ur_kernel_handle_t_(const ur_kernel_handle_t_ &other)
+      : _name(other._name), _subhandler(other._subhandler), _args(other._args),
+        _localArgInfo(other._localArgInfo), _localMemPool(other._localMemPool),
+        _localMemPoolSize(other._localMemPoolSize) {
     incrementReferenceCount();
   }
 
@@ -49,7 +51,6 @@ struct ur_kernel_handle_t_ : RefCounted {
     if (decrementReferenceCount() == 0) {
       free(_localMemPool);
     }
-  
   }
 
   const char *_name;
@@ -68,7 +69,7 @@ struct ur_kernel_handle_t_ : RefCounted {
       return;
     }
     // realloc handles nullptr case
-    _localMemPool = (char*)realloc(_localMemPool, reqSize);
+    _localMemPool = (char *)realloc(_localMemPool, reqSize);
     _localMemPoolSize = reqSize;
   }
 
@@ -85,7 +86,6 @@ struct ur_kernel_handle_t_ : RefCounted {
   }
 
 private:
-  char* _localMemPool = nullptr;
+  char *_localMemPool = nullptr;
   size_t _localMemPoolSize = 0;
 };
-

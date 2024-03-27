@@ -88,12 +88,12 @@ urUSMGetMemAllocInfo(ur_context_handle_t hContext, const void *pMem,
 
   UrReturnHelper ReturnValue(propSize, pPropValue, pPropSizeRet);
 
-  switch(propName) {
-    case  UR_USM_ALLOC_INFO_TYPE:
-      // Todo implement this in context
-      return ReturnValue(UR_USM_TYPE_DEVICE);
-    default:
-      DIE_NO_IMPLEMENTATION;
+  switch (propName) {
+  case UR_USM_ALLOC_INFO_TYPE:
+    // Todo implement this in context
+    return ReturnValue(UR_USM_TYPE_DEVICE);
+  default:
+    DIE_NO_IMPLEMENTATION;
   }
   return UR_RESULT_ERROR_INVALID_VALUE;
 }

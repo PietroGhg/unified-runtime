@@ -100,8 +100,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(ur_device_handle_t hDevice,
   case UR_DEVICE_INFO_LINKER_AVAILABLE:
     return ReturnValue(bool{false});
   case UR_DEVICE_INFO_MAX_COMPUTE_UNITS:
-    return ReturnValue(static_cast<uint32_t>(
-          hDevice->tp.num_threads()));
+    return ReturnValue(static_cast<uint32_t>(hDevice->tp.num_threads()));
   case UR_DEVICE_INFO_PARTITION_MAX_SUB_DEVICES:
     return ReturnValue(uint32_t{0});
   case UR_DEVICE_INFO_SUPPORTED_PARTITIONS:

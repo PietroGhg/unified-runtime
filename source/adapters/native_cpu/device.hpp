@@ -10,13 +10,12 @@
 
 #pragma once
 
-#include <ur/ur.hpp>
 #include "threadpool.hpp"
+#include <ur/ur.hpp>
 
 struct ur_device_handle_t_ {
   native_cpu::threadpool_t tp;
   ur_device_handle_t_(ur_platform_handle_t ArgPlt) : Platform(ArgPlt) {}
-
 
   ur_platform_handle_t Platform;
 };
