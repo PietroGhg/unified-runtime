@@ -143,6 +143,9 @@ struct ur_device_handle_t_ : _ur_object {
   // Read env settings to select immediate commandlist mode.
   ImmCmdlistMode useImmediateCommandLists();
 
+  // Whether Adapter uses driver's implementation of in-order lists or not
+  bool useDriverInOrderLists();
+
   // Returns whether immediate command lists are used on this device.
   ImmCmdlistMode ImmCommandListUsed{};
 
@@ -192,4 +195,6 @@ struct ur_device_handle_t_ : _ur_object {
   ZeCache<ZeStruct<ze_device_cache_properties_t>> ZeDeviceCacheProperties;
   ZeCache<ZeStruct<ze_device_ip_version_ext_t>> ZeDeviceIpVersionExt;
   ZeCache<struct ze_global_memsize> ZeGlobalMemSize;
+  ZeCache<ZeStruct<ze_mutable_command_list_exp_properties_t>>
+      ZeDeviceMutableCmdListsProperties;
 };

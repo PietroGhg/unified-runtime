@@ -29,7 +29,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urPlatformGet(
 ) {
   // Platform handles are cached for reuse. This is to ensure consistent
   // handle pointers across invocations and to improve retrieval performance.
-  if (const auto *cached_platforms = Adapter.PlatformCache->get_value();
+  if (const auto *cached_platforms = GlobalAdapter->PlatformCache->get_value();
       cached_platforms) {
     uint32_t nplatforms = (uint32_t)cached_platforms->size();
     if (NumPlatforms) {
@@ -41,7 +41,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urPlatformGet(
       }
     }
   } else {
-    return Adapter.PlatformCache->get_error();
+    return GlobalAdapter->PlatformCache->get_error();
   }
 
   return UR_RESULT_SUCCESS;
@@ -133,7 +133,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urPlatformCreateWithNativeHandle(
   auto ZeDriver = ur_cast<ze_driver_handle_t>(NativePlatform);
 
   uint32_t NumPlatforms = 0;
-  ur_adapter_handle_t AdapterHandle = &Adapter;
+  ur_adapter_handle_t AdapterHandle = GlobalAdapter;
   UR_CALL(urPlatformGet(&AdapterHandle, 1, 0, nullptr, &NumPlatforms));
 
   if (NumPlatforms) {
@@ -205,6 +205,39 @@ ur_result_t ur_platform_handle_t_::initialize() {
   // Check if import user ptr into USM feature has been requested.
   // If yes, then set up L0 API pointers if the platform supports it.
   ZeUSMImport.setZeUSMImport(this);
+
+  // Check if mutable command list extension is supported and initialize
+  // function pointers.
+  ZeMutableCmdListExt.Supported |=
+      (ZE_CALL_NOCHECK(
+           zeDriverGetExtensionFunctionAddress,
+           (ZeDriver, "zeCommandListGetNextCommandIdExp",
+            reinterpret_cast<void **>(
+                &ZeMutableCmdListExt.zexCommandListGetNextCommandIdExp))) == 0);
+
+  ZeMutableCmdListExt.Supported &=
+      (ZE_CALL_NOCHECK(zeDriverGetExtensionFunctionAddress,
+                       (ZeDriver, "zeCommandListUpdateMutableCommandsExp",
+                        reinterpret_cast<void **>(
+                            &ZeMutableCmdListExt
+                                 .zexCommandListUpdateMutableCommandsExp))) ==
+       0);
+
+  ZeMutableCmdListExt.Supported &=
+      (ZE_CALL_NOCHECK(
+           zeDriverGetExtensionFunctionAddress,
+           (ZeDriver, "zeCommandListUpdateMutableCommandSignalEventExp",
+            reinterpret_cast<void **>(
+                &ZeMutableCmdListExt
+                     .zexCommandListUpdateMutableCommandSignalEventExp))) == 0);
+
+  ZeMutableCmdListExt.Supported &=
+      (ZE_CALL_NOCHECK(
+           zeDriverGetExtensionFunctionAddress,
+           (ZeDriver, "zeCommandListUpdateMutableCommandWaitEventsExp",
+            reinterpret_cast<void **>(
+                &ZeMutableCmdListExt
+                     .zexCommandListUpdateMutableCommandWaitEventsExp))) == 0);
 
   return UR_RESULT_SUCCESS;
 }
