@@ -46,3 +46,7 @@ endif()
 if(UR_BUILD_ADAPTER_HIP OR UR_BUILD_ADAPTER_ALL)
     add_subdirectory(hip)
 endif()
+
+if(UR_BUILD_ADAPTER_NATIVE_CPU OR UR_BUILD_ADAPTER_ALL)
+    add_subdirectory(native_cpu)
+endif()
