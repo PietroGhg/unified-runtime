@@ -101,7 +101,7 @@ urUSMGetMemAllocInfo(ur_context_handle_t hContext, const void *pMem,
   case UR_USM_ALLOC_INFO_DEVICE:
     return ReturnValue(alloc_info.device);
   case UR_USM_ALLOC_INFO_POOL:
-    return UR_RESULT_ERROR_INVALID_ENUMERATION;
+    return ReturnValue(alloc_info.pool);;
   default:
     DIE_NO_IMPLEMENTATION;
   }
