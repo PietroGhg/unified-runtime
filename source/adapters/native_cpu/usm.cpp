@@ -11,19 +11,37 @@
 #include "ur_api.h"
 
 #include "common.hpp"
+#include <cstdlib>
+
+namespace native_cpu {
+
+static void *malloc_impl(uint32_t alignment, size_t size) {
+  void *ptr = nullptr;
+  if (alignment) {
+    ptr = std::aligned_alloc(alignment, size);
+  } else {
+    ptr = malloc(size);
+  }
+  return ptr;
+}
+
+} // namespace native_cpu
 
 UR_APIEXPORT ur_result_t UR_APICALL
 urUSMHostAlloc(ur_context_handle_t hContext, const ur_usm_desc_t *pUSMDesc,
                ur_usm_pool_handle_t pool, size_t size, void **ppMem) {
   std::ignore = hContext;
-  std::ignore = pUSMDesc;
   std::ignore = pool;
 
+  auto alignment = pUSMDesc ? pUSMDesc->align : 0u;
+  UR_ASSERT(!pUSMDesc ||
+                (alignment == 0 || ((alignment & (alignment - 1)) == 0)),
+            UR_RESULT_ERROR_INVALID_VALUE);
   UR_ASSERT(ppMem, UR_RESULT_ERROR_INVALID_NULL_POINTER);
   // TODO: Check Max size when UR_DEVICE_INFO_MAX_MEM_ALLOC_SIZE is implemented
   UR_ASSERT(size > 0, UR_RESULT_ERROR_INVALID_USM_SIZE);
 
-  *ppMem = malloc(size);
+  *ppMem = native_cpu::malloc_impl(alignment, size);
 
   return UR_RESULT_SUCCESS;
 }
@@ -34,14 +52,17 @@ urUSMDeviceAlloc(ur_context_handle_t hContext, ur_device_handle_t hDevice,
                  size_t size, void **ppMem) {
   std::ignore = hContext;
   std::ignore = hDevice;
-  std::ignore = pUSMDesc;
   std::ignore = pool;
 
+  auto alignment = pUSMDesc ? pUSMDesc->align : 0u;
+  UR_ASSERT(!pUSMDesc ||
+                (alignment == 0 || ((alignment & (alignment - 1)) == 0)),
+            UR_RESULT_ERROR_INVALID_VALUE);
   UR_ASSERT(ppMem, UR_RESULT_ERROR_INVALID_NULL_POINTER);
   // TODO: Check Max size when UR_DEVICE_INFO_MAX_MEM_ALLOC_SIZE is implemented
   UR_ASSERT(size > 0, UR_RESULT_ERROR_INVALID_USM_SIZE);
 
-  *ppMem = malloc(size);
+  *ppMem = native_cpu::malloc_impl(alignment, size);
 
   return UR_RESULT_SUCCESS;
 }
@@ -52,14 +73,17 @@ urUSMSharedAlloc(ur_context_handle_t hContext, ur_device_handle_t hDevice,
                  size_t size, void **ppMem) {
   std::ignore = hContext;
   std::ignore = hDevice;
-  std::ignore = pUSMDesc;
   std::ignore = pool;
 
+  auto alignment = pUSMDesc ? pUSMDesc->align : 0u;
+  UR_ASSERT(!pUSMDesc ||
+                (alignment == 0 || ((alignment & (alignment - 1)) == 0)),
+            UR_RESULT_ERROR_INVALID_VALUE);
   UR_ASSERT(ppMem, UR_RESULT_ERROR_INVALID_NULL_POINTER);
   // TODO: Check Max size when UR_DEVICE_INFO_MAX_MEM_ALLOC_SIZE is implemented
   UR_ASSERT(size > 0, UR_RESULT_ERROR_INVALID_USM_SIZE);
 
-  *ppMem = malloc(size);
+  *ppMem = native_cpu::malloc_impl(alignment, size);
 
   return UR_RESULT_SUCCESS;
 }
