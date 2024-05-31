@@ -40,6 +40,7 @@ urUSMHostAlloc(ur_context_handle_t hContext, const ur_usm_desc_t *pUSMDesc,
   UR_ASSERT(size > 0, UR_RESULT_ERROR_INVALID_USM_SIZE);
 
   *ppMem = native_cpu::malloc_impl(alignment, size);
+  UR_ASSERT(*ppMem != nullptr, UR_RESULT_ERROR_OUT_OF_HOST_MEMORY);
 
   return UR_RESULT_SUCCESS;
 }
@@ -59,6 +60,7 @@ urUSMDeviceAlloc(ur_context_handle_t hContext, ur_device_handle_t hDevice,
   UR_ASSERT(size > 0, UR_RESULT_ERROR_INVALID_USM_SIZE);
 
   *ppMem = native_cpu::malloc_impl(alignment, size);
+  UR_ASSERT(*ppMem != nullptr, UR_RESULT_ERROR_OUT_OF_RESOURCES);
 
   return UR_RESULT_SUCCESS;
 }
@@ -78,6 +80,7 @@ urUSMSharedAlloc(ur_context_handle_t hContext, ur_device_handle_t hDevice,
   UR_ASSERT(size > 0, UR_RESULT_ERROR_INVALID_USM_SIZE);
 
   *ppMem = native_cpu::malloc_impl(alignment, size);
+  UR_ASSERT(*ppMem != nullptr, UR_RESULT_ERROR_OUT_OF_HOST_MEMORY);
 
   return UR_RESULT_SUCCESS;
 }
