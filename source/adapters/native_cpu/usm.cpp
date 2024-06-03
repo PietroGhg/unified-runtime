@@ -15,20 +15,6 @@
 #include "context.hpp"
 #include <cstdlib>
 
-namespace native_cpu {
-
-static void *malloc_impl(uint32_t alignment, size_t size) {
-  void *ptr = nullptr;
-  if (alignment) {
-    ptr = std::aligned_alloc(alignment, size);
-  } else {
-    ptr = malloc(size);
-  }
-  return ptr;
-}
-
-} // namespace native_cpu
-
 UR_APIEXPORT ur_result_t UR_APICALL
 urUSMHostAlloc(ur_context_handle_t hContext, const ur_usm_desc_t *pUSMDesc,
                ur_usm_pool_handle_t pool, size_t size, void **ppMem) {
@@ -40,9 +26,8 @@ urUSMHostAlloc(ur_context_handle_t hContext, const ur_usm_desc_t *pUSMDesc,
   // TODO: Check Max size when UR_DEVICE_INFO_MAX_MEM_ALLOC_SIZE is implemented
   UR_ASSERT(size > 0, UR_RESULT_ERROR_INVALID_USM_SIZE);
 
-  void *ptr = native_cpu::malloc_impl(alignment, size);
+  auto *ptr = hContext->add_alloc(alignment, UR_USM_TYPE_HOST, size, nullptr);
   UR_ASSERT(ptr != nullptr, UR_RESULT_ERROR_OUT_OF_HOST_MEMORY);
-  hContext->add_alloc_info_entry(ptr, UR_USM_TYPE_HOST, size, nullptr);
   *ppMem = ptr;
 
   return UR_RESULT_SUCCESS;
@@ -61,10 +46,9 @@ urUSMDeviceAlloc(ur_context_handle_t hContext, ur_device_handle_t hDevice,
   // TODO: Check Max size when UR_DEVICE_INFO_MAX_MEM_ALLOC_SIZE is implemented
   UR_ASSERT(size > 0, UR_RESULT_ERROR_INVALID_USM_SIZE);
 
-  void *ptr = native_cpu::malloc_impl(alignment, size);
+  auto *ptr = hContext->add_alloc(alignment, UR_USM_TYPE_DEVICE, size, nullptr);
   UR_ASSERT(ptr != nullptr, UR_RESULT_ERROR_OUT_OF_RESOURCES);
   *ppMem = ptr;
-  hContext->add_alloc_info_entry(ptr, UR_USM_TYPE_DEVICE, size, nullptr);
 
   return UR_RESULT_SUCCESS;
 }
@@ -82,10 +66,9 @@ urUSMSharedAlloc(ur_context_handle_t hContext, ur_device_handle_t hDevice,
   // TODO: Check Max size when UR_DEVICE_INFO_MAX_MEM_ALLOC_SIZE is implemented
   UR_ASSERT(size > 0, UR_RESULT_ERROR_INVALID_USM_SIZE);
 
-  void *ptr = native_cpu::malloc_impl(alignment, size);
+  auto *ptr = hContext->add_alloc(alignment, UR_USM_TYPE_SHARED, size, nullptr);
   UR_ASSERT(ptr != nullptr, UR_RESULT_ERROR_OUT_OF_HOST_MEMORY);
   *ppMem = ptr;
-  hContext->add_alloc_info_entry(ptr, UR_USM_TYPE_SHARED, size, nullptr);
 
   return UR_RESULT_SUCCESS;
 }
@@ -95,8 +78,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urUSMFree(ur_context_handle_t hContext,
 
   UR_ASSERT(pMem, UR_RESULT_ERROR_INVALID_NULL_POINTER);
 
-  hContext->remove_alloc_info_entry(pMem);
-  free(pMem);
+  hContext->remove_alloc(pMem);
 
   return UR_RESULT_SUCCESS;
 }
