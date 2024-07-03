@@ -42,7 +42,7 @@ if (NOT DEFINED LEVEL_ZERO_LIBRARY OR NOT DEFINED LEVEL_ZERO_INCLUDE_DIR)
         set(UR_LEVEL_ZERO_LOADER_REPO "https://github.com/oneapi-src/level-zero.git")
     endif()
     if (UR_LEVEL_ZERO_LOADER_TAG STREQUAL "")
-        set(UR_LEVEL_ZERO_LOADER_TAG v1.17.0)
+        set(UR_LEVEL_ZERO_LOADER_TAG v1.17.6)
     endif()
 
     # Disable due to a bug https://github.com/oneapi-src/level-zero/issues/104
@@ -116,6 +116,7 @@ add_ur_adapter(${TARGET_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/common.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/context.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/enqueue_native.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/usm.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/usm_p2p.cpp
