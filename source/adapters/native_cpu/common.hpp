@@ -12,6 +12,7 @@
 
 #include "logger/ur_logger.hpp"
 #include "ur/ur.hpp"
+#include <chrono>
 
 constexpr size_t MaxMessageSize = 256;
 
@@ -69,4 +70,10 @@ struct RefCounted {
 template <typename T> inline void decrementOrDelete(T *refC) {
   if (refC->decrementReferenceCount() == 0)
     delete refC;
+}
+
+inline uint64_t get_timestamp() {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             std::chrono::high_resolution_clock::now().time_since_epoch())
+      .count();
 }
