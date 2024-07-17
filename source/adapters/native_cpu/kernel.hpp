@@ -11,7 +11,6 @@
 #include "common.hpp"
 #include "nativecpu_state.hpp"
 #include "program.hpp"
-#include <array>
 #include <ur_api.h>
 #include <utility>
 

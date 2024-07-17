@@ -9,10 +9,17 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 #include "common.hpp"
-#include "device.hpp"
+#include "ur_api.h"
 
 struct ur_queue_handle_t_ : RefCounted {
-  ur_device_handle_t_ *const device;
+  ur_queue_handle_t_(ur_device_handle_t device, ur_context_handle_t context)
+      : device(device), context(context) {}
 
-  ur_queue_handle_t_(ur_device_handle_t_ *device) : device(device) {}
+  ur_device_handle_t getDevice() const { return device; }
+
+  ur_context_handle_t getContext() const { return context; }
+
+private:
+  ur_device_handle_t device;
+  ur_context_handle_t context;
 };
