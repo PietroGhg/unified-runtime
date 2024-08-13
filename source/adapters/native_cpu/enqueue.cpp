@@ -118,7 +118,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
           for (unsigned local1 = 0; local1 < ndr.LocalSize[1]; local1++) {
             for (unsigned local0 = 0; local0 < ndr.LocalSize[0]; local0++) {
               state.update(g0, g1, g2, local0, local1, local2);
-              hKernel->_subhandler(hKernel->_args.data(), &state);
+              hKernel->_subhandler(hKernel->getArgs().data(), &state);
             }
           }
         }
@@ -154,7 +154,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
                 native_cpu::state resized_state =
                     getResizedState(ndr, itemsPerThread);
                 resized_state.update(g0, g1, g2);
-                hKernel->_subhandler(hKernel->_args.data(), &resized_state);
+                hKernel->_subhandler(hKernel->getArgs().data(), &resized_state);
               }));
         }
         // Peel the remaining work items. Since the local size is 1, we iterate
@@ -162,7 +162,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
         for (unsigned g0 = new_num_work_groups_0 * itemsPerThread; g0 < numWG0;
              g0++) {
           state.update(g0, g1, g2);
-          hKernel->_subhandler(hKernel->_args.data(), &state);
+          hKernel->_subhandler(hKernel->getArgs().data(), &state);
         }
       }
     }
@@ -180,7 +180,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
                 for (unsigned g0 = 0; g0 < numWG0; g0++) {
                   kernel.handleLocalArgs(numParallelThreads, threadId);
                   state.update(g0, g1, g2);
-                  kernel._subhandler(kernel._args.data(), &state);
+                  kernel._subhandler(kernel.getArgs().data(), &state);
                 }
               }));
         }
@@ -197,7 +197,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
                     size_t threadId, ur_kernel_handle_t_ kernel) mutable {
                   kernel.handleLocalArgs(numParallelThreads, threadId);
                   state.update(g0, g1, g2);
-                  kernel._subhandler(kernel._args.data(), &state);
+                  kernel._subhandler(kernel.getArgs().data(), &state);
                 });
           }
         }
@@ -236,10 +236,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
 
   *phEvent = event;
   event->set_callback([hKernel, event]() {
-    // TODO: we should avoid calling clear here by avoiding using push_back
-    // in setKernelArgs.
     event->tick_end();
-    hKernel->_args.clear();
     hKernel->_localArgInfo.clear();
   });
 
