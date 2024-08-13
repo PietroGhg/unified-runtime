@@ -91,7 +91,6 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
   }
 
   // TODO: add proper error checking
-  // TODO: add proper event dep management
   native_cpu::NDRDescT ndr(workDim, pGlobalWorkOffset, pGlobalWorkSize,
                            pLocalWorkSize);
   auto &tp = hQueue->getDevice()->tp;
@@ -109,6 +108,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
   auto event =
       new ur_event_handle_t_(hQueue, UR_COMMAND_KERNEL_LAUNCH);
   event->tick_start();
+
 #ifndef NATIVECPU_USE_OCK
   hKernel->handleLocalArgs(1, 0);
   for (unsigned g2 = 0; g2 < numWG2; g2++) {
@@ -240,8 +240,6 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
     hKernel->_localArgInfo.clear();
   });
 
-  // TODO: remove this wait and make the enqueue truly async.
-  urEventWait(1, phEvent);
   return UR_RESULT_SUCCESS;
 }
 
