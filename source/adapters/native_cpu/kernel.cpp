@@ -55,7 +55,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urKernelSetArgValue(
   UR_ASSERT(hKernel, UR_RESULT_ERROR_INVALID_NULL_HANDLE);
   UR_ASSERT(argSize, UR_RESULT_ERROR_INVALID_KERNEL_ARGUMENT_SIZE);
 
-  hKernel->addArg(const_cast<void *>(pArgValue), argIndex, argSize);
+  hKernel->addArg(pArgValue, argIndex, argSize);
 
   return UR_RESULT_SUCCESS;
 }

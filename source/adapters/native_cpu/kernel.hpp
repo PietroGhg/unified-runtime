@@ -46,6 +46,7 @@ struct ur_kernel_handle_t_ : RefCounted {
   ~ur_kernel_handle_t_() {
     if (decrementReferenceCount() == 0) {
       free(_localMemPool);
+      Args.deallocate();
     }
   }
 
@@ -57,13 +58,10 @@ struct ur_kernel_handle_t_ : RefCounted {
 
 
   struct arguments {
-    static constexpr size_t MaxParamBytes = 4000u;
-    using args_t = std::array<char, MaxParamBytes>;
-    using args_size_t = std::vector<size_t>;
     using args_index_t = std::vector<void *>;
-    args_t Storage;
-    args_size_t ParamSizes;
     args_index_t Indices;
+    std::vector<size_t> ParamSizes;
+    std::vector<bool> OwnsMem;
 
     /// Add an argument to the kernel.
     /// If the argument existed before, it is replaced.
@@ -73,27 +71,40 @@ struct ur_kernel_handle_t_ : RefCounted {
     void addArg(size_t Index, size_t Size, const void *Arg) {
       if (Index + 1 > Indices.size()) {
         Indices.resize(Index + 1);
-        // Ensure enough space for the new argument
+        OwnsMem.resize(Index + 1);
         ParamSizes.resize(Index + 1);
+
+        // Update the stored value for the argument
+        Indices[Index] = malloc(Size);
+        OwnsMem[Index] = true;
+      } else {
+        if (ParamSizes[Index] != Size)
+          Indices[Index] = realloc(Indices[Index], Size);
       }
-      ParamSizes[Index] = Size;
-      // calculate the insertion point on the array
-      size_t InsertPos = std::accumulate(std::begin(ParamSizes),
-                                         std::begin(ParamSizes) + Index, 0);
-      // Update the stored value for the argument
-      std::memcpy(&Storage[InsertPos], Arg, Size);
-      Indices[Index] = &Storage[InsertPos];
+      std::memcpy(Indices[Index], Arg, Size);
     }
 
     void addPtrArg(size_t Index, void *Arg) {
-      constexpr size_t Size = sizeof(uint8_t*);
       if (Index + 1 > Indices.size()) {
         Indices.resize(Index + 1);
-        // Ensure enough space for the new argument
+        OwnsMem.resize(Index + 1);
         ParamSizes.resize(Index + 1);
+
+        OwnsMem[Index] = false;
+        ParamSizes[Index] = sizeof(uint8_t*);
       }
-      ParamSizes[Index] = Size;
       Indices[Index] = Arg;
+    }
+
+    // This is called by the destructor of ur_kernel_handle_t_, since
+    // ur_kernel_handle_t_ implements reference counting and we want
+    // to deallocate only when the reference count is 0.
+    void deallocate() {
+      assert(OwnsMem.size() == Indices.size() && "Size mismatch");
+      for(size_t Index = 0; Index < Indices.size(); Index++) {
+        if(OwnsMem[Index])
+          free(Indices[Index]);
+      }
     }
 
     const args_index_t &getIndices() const noexcept { return Indices; }
@@ -139,7 +150,7 @@ struct ur_kernel_handle_t_ : RefCounted {
     return Args.getIndices();
   }
 
-  void addArg(void *Ptr, size_t Index, size_t Size) {
+  void addArg(const void *Ptr, size_t Index, size_t Size) {
     Args.addArg(Index, Size, Ptr);
   }
   
