@@ -62,6 +62,7 @@ struct ur_kernel_handle_t_ : RefCounted {
     args_index_t Indices;
     std::vector<size_t> ParamSizes;
     std::vector<bool> OwnsMem;
+    static constexpr size_t MaxAlign = 16 * sizeof(double);
 
     /// Add an argument to the kernel.
     /// If the argument existed before, it is replaced.
@@ -75,7 +76,7 @@ struct ur_kernel_handle_t_ : RefCounted {
         ParamSizes.resize(Index + 1);
 
         // Update the stored value for the argument
-        Indices[Index] = malloc(Size);
+        Indices[Index] = native_cpu::aligned_malloc(MaxAlign , Size);
         OwnsMem[Index] = true;
       } else {
         if (ParamSizes[Index] != Size)
@@ -103,7 +104,7 @@ struct ur_kernel_handle_t_ : RefCounted {
       assert(OwnsMem.size() == Indices.size() && "Size mismatch");
       for(size_t Index = 0; Index < Indices.size(); Index++) {
         if(OwnsMem[Index])
-          free(Indices[Index]);
+          native_cpu::aligned_free(Indices[Index]);
       }
     }
 
