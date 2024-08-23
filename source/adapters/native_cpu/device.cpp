@@ -73,7 +73,10 @@ static uint64_t os_memory_bounded_size() {
   const uint64_t size = os_memory_total_size();
   // Limit the memory size to what fits in a size_t, this is necessary when
   // compiling for 32 bits on a 64 bits host
-  return std::numeric_limits<size_t>::max() >= size
+  if constexpr (sizeof(size_t) == 8)
+    return size;
+  else
+    return std::numeric_limits<size_t>::max() >= size
              ? size
              : std::numeric_limits<size_t>::max();
 }
