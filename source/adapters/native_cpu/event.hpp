@@ -1,5 +1,5 @@
+#pragma once
 #include "common.hpp"
-#include "queue.hpp"
 #include "ur_api.h"
 #include <cstdint>
 #include <future>
@@ -9,15 +9,13 @@
 struct ur_event_handle_t_ : RefCounted {
 
   ur_event_handle_t_(ur_queue_handle_t queue, ur_command_t command_type,
-                     std::vector<std::future<void>> &futures)
-      : queue(queue), context(queue->getContext()), command_type(command_type),
-        done(false), futures(std::move(futures)) {}
+                     std::vector<std::future<void>> &futures);
 
-  ur_event_handle_t_(ur_queue_handle_t queue, ur_command_t command_type)
-      : queue(queue), context(queue->getContext()), command_type(command_type),
-        done(false) {}
+  ur_event_handle_t_(ur_queue_handle_t queue, ur_command_t command_type);
 
-  void set_callback(const std::function<void()>& cb) {
+  ~ur_event_handle_t_();
+
+  void set_callback(const std::function<void()> &cb) {
     has_callback = true;
     callback = std::move(cb);
   }

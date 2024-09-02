@@ -12,6 +12,7 @@
 
 #include "common.hpp"
 #include "event.hpp"
+#include "queue.hpp"
 #include <cstdint>
 
 UR_APIEXPORT ur_result_t UR_APICALL urEventGetInfo(ur_event_handle_t hEvent,
@@ -116,4 +117,26 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueTimestampRecordingExp(
   std::ignore = phEvent;
 
   DIE_NO_IMPLEMENTATION;
+}
+
+ur_event_handle_t_::ur_event_handle_t_(ur_queue_handle_t queue,
+                                       ur_command_t command_type,
+                                       std::vector<std::future<void>> &futures)
+    : queue(queue), context(queue->getContext()), command_type(command_type),
+      done(false), futures(std::move(futures)) {
+  this->queue->addEvent(this);
+}
+
+ur_event_handle_t_::ur_event_handle_t_(ur_queue_handle_t queue,
+                                       ur_command_t command_type)
+    : queue(queue), context(queue->getContext()), command_type(command_type),
+      done(false) {
+  this->queue->addEvent(this);
+}
+
+ur_event_handle_t_::~ur_event_handle_t_() {
+  if (!done) {
+    wait();
+  }
+  queue->removeEvent(this);
 }

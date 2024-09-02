@@ -77,8 +77,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urQueueCreateWithNativeHandle(
 }
 
 UR_APIEXPORT ur_result_t UR_APICALL urQueueFinish(ur_queue_handle_t hQueue) {
-  std::ignore = hQueue;
-  // TODO: is this fine as no-op?
+  hQueue->finish();
   return UR_RESULT_SUCCESS;
 }
 

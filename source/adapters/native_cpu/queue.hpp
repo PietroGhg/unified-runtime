@@ -9,7 +9,9 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 #include "common.hpp"
+#include "event.hpp"
 #include "ur_api.h"
+#include <set>
 
 struct ur_queue_handle_t_ : RefCounted {
   ur_queue_handle_t_(ur_device_handle_t device, ur_context_handle_t context)
@@ -19,7 +21,19 @@ struct ur_queue_handle_t_ : RefCounted {
 
   ur_context_handle_t getContext() const { return context; }
 
+  void addEvent(ur_event_handle_t event) { events.insert(event); }
+
+  void removeEvent(ur_event_handle_t event) { events.erase(event); }
+
+  void finish() {
+    for (auto &ev : events) {
+      ev->wait();
+    }
+    events.clear();
+  }
+
 private:
   ur_device_handle_t device;
   ur_context_handle_t context;
+  std::set<ur_event_handle_t> events;
 };
