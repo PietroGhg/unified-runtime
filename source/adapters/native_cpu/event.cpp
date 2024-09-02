@@ -138,5 +138,18 @@ ur_event_handle_t_::~ur_event_handle_t_() {
   if (!done) {
     wait();
   }
+}
+
+void ur_event_handle_t_::wait() {
+  std::lock_guard<std::mutex> lock(mutex);
+  if(done) {
+    return;
+  }
+  for(auto& f : futures) {
+    f.wait();
+  }
+  if (has_callback)
+    callback();
   queue->removeEvent(this);
+  done = true;
 }

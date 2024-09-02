@@ -20,18 +20,7 @@ struct ur_event_handle_t_ : RefCounted {
     callback = std::move(cb);
   }
 
-  void wait() {
-    std::lock_guard<std::mutex> lock(mutex);
-    if(done) {
-      return;
-    }
-    for(auto& f : futures) {
-      f.wait();
-    }
-    if (has_callback)
-      callback();
-    done = true;
-  }
+  void wait();
 
   uint32_t getExecutionStatus() {
     // TODO: add support for UR_EVENT_STATUS_RUNNING

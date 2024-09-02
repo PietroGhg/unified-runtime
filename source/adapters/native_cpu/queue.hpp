@@ -26,10 +26,16 @@ struct ur_queue_handle_t_ : RefCounted {
   void removeEvent(ur_event_handle_t event) { events.erase(event); }
 
   void finish() {
-    for (auto &ev : events) {
+    while(!events.empty()) {
+      auto ev = *events.begin();
+      // ur_event_handle_t_::wait removes itself from the events set in the queue
       ev->wait();
     }
     events.clear();
+  }
+
+  ~ur_queue_handle_t_() {
+    finish();
   }
 
 private:
