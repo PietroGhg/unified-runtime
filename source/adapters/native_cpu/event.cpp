@@ -14,6 +14,7 @@
 #include "event.hpp"
 #include "queue.hpp"
 #include <cstdint>
+#include <mutex>
 
 UR_APIEXPORT ur_result_t UR_APICALL urEventGetInfo(ur_event_handle_t hEvent,
                                                    ur_event_info_t propName,
@@ -120,14 +121,6 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueTimestampRecordingExp(
 }
 
 ur_event_handle_t_::ur_event_handle_t_(ur_queue_handle_t queue,
-                                       ur_command_t command_type,
-                                       std::vector<std::future<void>> &futures)
-    : queue(queue), context(queue->getContext()), command_type(command_type),
-      done(false), futures(std::move(futures)) {
-  this->queue->addEvent(this);
-}
-
-ur_event_handle_t_::ur_event_handle_t_(ur_queue_handle_t queue,
                                        ur_command_t command_type)
     : queue(queue), context(queue->getContext()), command_type(command_type),
       done(false) {
@@ -141,15 +134,18 @@ ur_event_handle_t_::~ur_event_handle_t_() {
 }
 
 void ur_event_handle_t_::wait() {
-  std::lock_guard<std::mutex> lock(mutex);
-  if(done) {
+  std::unique_lock<std::mutex> lock(mutex);
+  if (done) {
     return;
   }
-  for(auto& f : futures) {
+  for (auto &f : futures) {
     f.wait();
   }
-  if (has_callback)
-    callback();
   queue->removeEvent(this);
   done = true;
+  // The callback may need to acquire the lock, so we unlock it here
+  lock.unlock();
+
+  if (callback)
+    callback();
 }

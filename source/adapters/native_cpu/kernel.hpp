@@ -76,11 +76,14 @@ struct ur_kernel_handle_t_ : RefCounted {
         ParamSizes.resize(Index + 1);
 
         // Update the stored value for the argument
-        Indices[Index] = native_cpu::aligned_malloc(MaxAlign , Size);
+        Indices[Index] = native_cpu::aligned_malloc(MaxAlign, Size);
         OwnsMem[Index] = true;
+        ParamSizes[Index] = Size;
       } else {
-        if (ParamSizes[Index] != Size)
+        if (ParamSizes[Index] != Size) {
           Indices[Index] = realloc(Indices[Index], Size);
+          ParamSizes[Index] = Size;
+        }
       }
       std::memcpy(Indices[Index], Arg, Size);
     }
@@ -108,7 +111,7 @@ struct ur_kernel_handle_t_ : RefCounted {
       }
     }
 
-    const args_index_t &getIndices() const noexcept { return Indices; }
+    args_index_t &getIndices() noexcept { return Indices; }
 
   } Args;
 
@@ -147,9 +150,7 @@ struct ur_kernel_handle_t_ : RefCounted {
     }
   }
 
-  std::vector<void *> getArgs() const {
-    return Args.getIndices();
-  }
+  std::vector<void *> &getArgs() { return Args.getIndices(); }
 
   void addArg(const void *Ptr, size_t Index, size_t Size) {
     Args.addArg(Index, Size, Ptr);

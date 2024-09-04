@@ -232,11 +232,12 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueKernelLaunch(
   }
 
 #endif // NATIVECPU_USE_OCK
-  event->add_futures(futures);
+  event->set_futures(futures);
 
   *phEvent = event;
   event->set_callback([hKernel, event]() {
     event->tick_end();
+    // TODO: avoid calling clear() here.
     hKernel->_localArgInfo.clear();
   });
 

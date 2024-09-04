@@ -8,17 +8,11 @@
 
 struct ur_event_handle_t_ : RefCounted {
 
-  ur_event_handle_t_(ur_queue_handle_t queue, ur_command_t command_type,
-                     std::vector<std::future<void>> &futures);
-
   ur_event_handle_t_(ur_queue_handle_t queue, ur_command_t command_type);
 
   ~ur_event_handle_t_();
 
-  void set_callback(const std::function<void()> &cb) {
-    has_callback = true;
-    callback = std::move(cb);
-  }
+  void set_callback(const std::function<void()> &cb) { callback = cb; }
 
   void wait();
 
@@ -31,27 +25,24 @@ struct ur_event_handle_t_ : RefCounted {
     return UR_EVENT_STATUS_SUBMITTED;
   }
 
-  ur_queue_handle_t getQueue() {
-    return queue;
-  }
+  ur_queue_handle_t getQueue() const { return queue; }
 
-  ur_context_handle_t getContext() {
-    return context;
-  }
+  ur_context_handle_t getContext() const { return context; }
 
-  ur_command_t getCommandType() { return command_type; }
+  ur_command_t getCommandType() const { return command_type; }
 
-  void add_futures(std::vector<std::future<void>> &fs) {
-    for (auto &f : fs) {
-      futures.emplace_back(std::move(f));
-    }
+  void set_futures(std::vector<std::future<void>> &fs) {
+    std::lock_guard<std::mutex> lock(mutex);
+    futures = std::move(fs);
   }
 
   void tick_start() {
+    std::lock_guard<std::mutex> lock(mutex);
     timestamp_start = get_timestamp();
   }
 
   void tick_end() {
+    std::lock_guard<std::mutex> lock(mutex);
     timestamp_end = get_timestamp();
   }
 
