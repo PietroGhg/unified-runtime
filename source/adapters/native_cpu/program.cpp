@@ -8,6 +8,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "ur/ur.hpp"
 #include "ur_api.h"
 
 #include "common.hpp"
@@ -95,6 +96,8 @@ UR_APIEXPORT ur_result_t UR_APICALL urProgramCreateWithBinary(
       } else if (Tag ==
                  __SYCL_UR_PROGRAM_METADATA_TAG_MAX_LINEAR_WORK_GROUP_SIZE) {
         hProgram->KernelMaxLinearWorkGroupSizeMD[Prefix] = mdNode.value.data64;
+      } else if (Tag == __SYCL_UR_PROGRAM_METADATA_TAG_IS_ND) {
+        hProgram->KernelIsNDRangeMD[Prefix] = true;
       }
     }
   }

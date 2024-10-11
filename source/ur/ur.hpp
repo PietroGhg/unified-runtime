@@ -57,6 +57,8 @@ const ur_command_t UR_EXT_COMMAND_TYPE_USER =
   "@max_work_group_size"
 #define __SYCL_UR_PROGRAM_METADATA_TAG_MAX_LINEAR_WORK_GROUP_SIZE              \
   "@max_linear_work_group_size"
+//TODO define this properly
+#define __SYCL_UR_PROGRAM_METADATA_TAG_IS_ND "@is_nd_range"
 #define __SYCL_UR_PROGRAM_METADATA_TAG_NEED_FINALIZATION "Requires finalization"
 
 // Terminates the process with a catastrophic error message.

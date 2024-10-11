@@ -41,6 +41,7 @@ struct ur_program_handle_t_ : RefCounted {
   std::unordered_map<std::string, native_cpu::WGSize_t>
       KernelMaxWorkGroupSizeMD;
   std::unordered_map<std::string, uint64_t> KernelMaxLinearWorkGroupSizeMD;
+  std::unordered_map<std::string, bool> KernelIsNDRangeMD;
 };
 
 // The nativecpu_entry struct is also defined as LLVM-IR in the

@@ -39,16 +39,12 @@ struct local_arg_info_t {
 
 struct ur_kernel_handle_t_ : RefCounted {
 
-  ur_kernel_handle_t_(ur_program_handle_t hProgram, const char *name,
-                      nativecpu_task_t subhandler)
-      : hProgram(hProgram), _name{name}, _subhandler{std::move(subhandler)} {}
-
   ur_kernel_handle_t_(const ur_kernel_handle_t_ &other)
       : hProgram(other.hProgram), _name(other._name),
         _subhandler(other._subhandler), _args(other._args),
         _localArgInfo(other._localArgInfo), _localMemPool(other._localMemPool),
         _localMemPoolSize(other._localMemPoolSize),
-        ReqdWGSize(other.ReqdWGSize) {
+        ReqdWGSize(other.ReqdWGSize), NDRangeKernel(other.NDRangeKernel) {
     incrementReferenceCount();
   }
 
@@ -61,10 +57,10 @@ struct ur_kernel_handle_t_ : RefCounted {
                       nativecpu_task_t subhandler,
                       std::optional<native_cpu::WGSize_t> ReqdWGSize,
                       std::optional<native_cpu::WGSize_t> MaxWGSize,
-                      std::optional<uint64_t> MaxLinearWGSize)
+                      std::optional<uint64_t> MaxLinearWGSize, bool isNDRangeKernel)
       : hProgram(hProgram), _name{name}, _subhandler{std::move(subhandler)},
         ReqdWGSize(ReqdWGSize), MaxWGSize(MaxWGSize),
-        MaxLinearWGSize(MaxLinearWGSize) {}
+        MaxLinearWGSize(MaxLinearWGSize), NDRangeKernel(isNDRangeKernel) {}
 
   ur_program_handle_t hProgram;
   std::string _name;
@@ -106,10 +102,15 @@ struct ur_kernel_handle_t_ : RefCounted {
     }
   }
 
+  bool isNDRangeKernel() const {
+    return NDRangeKernel;
+  }
+
 private:
   char *_localMemPool = nullptr;
   size_t _localMemPoolSize = 0;
   std::optional<native_cpu::WGSize_t> ReqdWGSize = std::nullopt;
   std::optional<native_cpu::WGSize_t> MaxWGSize = std::nullopt;
   std::optional<uint64_t> MaxLinearWGSize = std::nullopt;
+  const bool NDRangeKernel = false;
 };
